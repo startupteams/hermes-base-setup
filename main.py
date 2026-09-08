@@ -9,6 +9,13 @@ import os
 import argparse
 import subprocess
 from pathlib import Path
+from dotenv import load_dotenv
+
+
+# Explicitly load environment variables from /opt/hermes/.env
+load_dotenv("/opt/hermes/.env")
+
+env = os.environ.copy()
 
 def main():
     parser = argparse.ArgumentParser(description="Run an isolated employee Hermes Gateway instance.")
@@ -28,11 +35,17 @@ def main():
         sys.exit(1)
 
     print(f"[*] Launching Hermes Gateway for profile: [{args.profile}]...")
+
+    # Map telegram token explicitly
+    profile_token_key = f"TELEGRAM_BOT_TOKEN_{args.profile.upper()}"
+    if profile_token_key in env:
+        env["TELEGRAM_BOT_TOKEN"] = env[profile_token_key]
+
     
     # Execute native Hermes Gateway targeting the profile configuration
     cmd = [
-        sys.executable, "-m", "hermes", "gateway",
-        "--config", str(profile_config)
+    	"/opt/hermes/.venv/bin/hermes", "gateway", "run",
+     	"--profile", args.profile
     ]
 
     try:
