@@ -2,14 +2,16 @@
 """
 Hermes AI Agent - Employee Onboarding Utility
 Generates isolated profile environments in profiles/<employee_name>/
-using minimalist SOUL.md blueprints, then commits and pushes to GitHub.
+using minimalist SOUL.md blueprints on the main branch.
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Short-key mapping for quick CLI usage
 TEMPLATE_MAP = {
@@ -39,32 +41,31 @@ def init_employee(
     chat_id: str,
     template_folder: str, 
     root_dir: Path, 
-    create_branch: bool = True,
     push_remote: bool = True
 ):
     name_clean = name.strip().lower().replace(" ", "_")
-    branch_name = f"{name_clean}"
     profile_dir = root_dir / "profiles" / name_clean
     template_soul = root_dir / "templates" / template_folder / "SOUL.md"
+
+    # Load root .env variables to fetch profile credentials if present
+    load_dotenv(root_dir / ".env")
+    env_token_key = f"TELEGRAM_BOT_TOKEN_{name_clean.upper()}"
+    bot_token_val = os.getenv(env_token_key, "")
 
     print(f"\n==================================================")
     print(f" Initializing Hermes Agent Profile for: {name}")
     print(f" Target Folder: profiles/{name_clean}/")
     print(f" Role: {role}")
     print(f" Template: {template_folder}")
+    print(f" Target Branch: main")
     print(f"==================================================\n")
 
-    # 1. Switch or create local git branch
-    if create_branch:
-        print(f"[*] Creating local Git branch '{branch_name}'...")
-        run_git_command(["git", "checkout", "-b", branch_name], cwd=root_dir)
-
-    # 2. Build profile subdirectories
+    # 1. Build profile subdirectories
     profile_dir.mkdir(parents=True, exist_ok=True)
     memories_dir = profile_dir / "memories"
     memories_dir.mkdir(parents=True, exist_ok=True)
 
-    # 3. Copy blueprint SOUL.md or write a fallback
+    # 2. Copy blueprint SOUL.md or write a fallback
     profile_soul = profile_dir / "SOUL.md"
     if template_soul.exists():
         print(f"[*] Copying blueprint persona from '{template_folder}/SOUL.md'...")
@@ -72,7 +73,6 @@ def init_employee(
     else:
         print(f"[!] Warning: '{template_soul}' not found. Generating basic SOUL.md.")
         soul_md_content = f"""# Hermes Agent Persona for {name}
-
 You are {name}'s dedicated AI Technical Partner ({role}) at Startup Teams.
 Directives:
 - Provide direct, pragmatically sharp, and runnable code or commands.
@@ -80,17 +80,19 @@ Directives:
 """
         profile_soul.write_text(soul_md_content, encoding="utf-8")
 
-    # 4. Write profile config.yaml
+    # 3. Write profile config.yaml
     profile_config_content = f"""# Profile Configuration for {name}
 agent:
   name: "{name.title()} - {role} Bot"
 
 telegram:
   enabled: true
-  bot_token_env: "TELEGRAM_BOT_TOKEN_{name_clean.upper()}"
+  bot_token: {bot_token_val}
+  bot_token_env: {env_token_key}
   allowed_chat_id: {chat_id if chat_id else 0}
   dm_policy: open
-  telegram_allowed_users: allowed_chat_id
+  telegram_allowed_users: {chat_id if chat_id else 0}
+
 onboarding:
   seen:
     profile_build_offered: true
@@ -99,6 +101,7 @@ model:
   provider: openrouter
   default: openrouter/free
   max_tokens: 8192
+
 providers:
   openrouter:
     api: https://openrouter.ai/api/v1/chat/completions
@@ -108,7 +111,7 @@ providers:
     config_file.write_text(profile_config_content, encoding="utf-8")
     print(f"[+] Created: {config_file.relative_to(root_dir)}")
 
-    # 5. Write personalized USER.md
+    # 4. Write personalized USER.md
     user_md_content = f"""# User Profile: {name}
 
 - **Name:** {name}
@@ -123,44 +126,42 @@ providers:
     user_file.write_text(user_md_content, encoding="utf-8")
     print(f"[+] Created: {user_file.relative_to(root_dir)}")
 
-    # 6. Write personalized MEMORY.md
+    # 5. Write personalized MEMORY.md
     memory_md_content = f"""# Working Memory for {name}
 
-- **Branch:** `{branch_name}`
+- **Branch:** `main`
 - **Active Role:** {role}
 """
     mem_file = memories_dir / "MEMORY.md"
     mem_file.write_text(memory_md_content, encoding="utf-8")
     print(f"[+] Created: {mem_file.relative_to(root_dir)}")
 
-    # 7. Commit & push branch to GitHub
-    if create_branch:
-        print(f"[*] Staging and committing profile files...")
-        run_git_command(["git", "add", f"profiles/{name_clean}"], cwd=root_dir)
-        run_git_command(["git", "commit", "-m", f"feat(profile): initialize agent environment for {name_clean}"], cwd=root_dir)
+    # 6. Commit & push directly on main
+    print(f"[*] Staging and committing profile files on 'main'...")
+    run_git_command(["git", "add", f"profiles/{name_clean}"], cwd=root_dir)
+    run_git_command(["git", "commit", "-m", f"feat(profile): initialize agent environment for {name_clean}"], cwd=root_dir)
 
-        if push_remote:
-            print(f"[*] Pushing branch '{branch_name}' to GitHub...")
-            push_res = run_git_command(["git", "push", "-u", "origin", branch_name], cwd=root_dir)
-            if push_res is not None:
-                print(f"[✓] Successfully published '{branch_name}' to GitHub remote.")
+    if push_remote:
+        print(f"[*] Pushing changes to origin main...")
+        push_res = run_git_command(["git", "push", "origin", "main"], cwd=root_dir)
+        if push_res is not None:
+            print(f"[+] Successfully published profile to GitHub main.")
 
-    print(f"\n[✓] Successfully onboarded {name} into profiles/{name_clean}/")
+    print(f"\n[+] Successfully onboarded {name} into profiles/{name_clean}/")
     print(f"    Run agent using: python main.py --profile {name_clean}\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Initialize isolated Hermes AI Agent Profile for an Employee")
-    parser.add_argument("--name", required=True, help="Employee name (e.g. robin, dave)")
-    parser.add_argument("--role", default="Software Engineer", help="Employee role/title")
+    parser.add_argument("--name", required=True, help="Employee name (e.g. biraj, robin)")
+    parser.add_argument("--role", default="Software Engineer", help="Human-readable role description (e.g. 'AI/ML Intern')")
     parser.add_argument("--chat-id", default="", help="Telegram numeric Chat ID")
     parser.add_argument(
         "--template", 
         default="fullstack", 
         help=f"Template key/alias ({', '.join(TEMPLATE_MAP.keys())}) or folder name"
     )
-    parser.add_argument("--no-branch", action="store_true", help="Do not create git branch")
-    parser.add_argument("--no-push", action="store_true", help="Do not push branch to GitHub automatically")
+    parser.add_argument("--no-push", action="store_true", help="Do not push commit to GitHub automatically")
 
     args = parser.parse_args()
     root_dir = Path(__file__).resolve().parent
@@ -173,7 +174,6 @@ def main():
         chat_id=args.chat_id,
         template_folder=template_folder,
         root_dir=root_dir,
-        create_branch=not args.no_branch,
         push_remote=not args.no_push
     )
 
