@@ -86,8 +86,23 @@ agent:
   name: "{name.title()} - {role} Bot"
 
 telegram:
+  enabled: true
   bot_token_env: "TELEGRAM_BOT_TOKEN_{name_clean.upper()}"
   allowed_chat_id: {chat_id if chat_id else 0}
+  dm_policy: open
+  telegram_allowed_users: allowed_chat_id
+onboarding:
+  seen:
+    profile_build_offered: true
+
+model:
+  provider: openrouter
+  default: openrouter/free
+  max_tokens: 8192
+providers:
+  openrouter:
+    api: https://openrouter.ai/api/v1/chat/completions
+    key_env: OPENROUTER_API_KEY
 """
     config_file = profile_dir / "config.yaml"
     config_file.write_text(profile_config_content, encoding="utf-8")
