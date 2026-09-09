@@ -2,7 +2,7 @@
 """
 Hermes AI Agent - Employee Onboarding Utility
 Generates isolated profile environments in profiles/<employee_name>/
-using minimalist SOUL.md blueprints on the main branch.
+using minimalist SOUL.md blueprints on a dedicated Git branch.
 """
 
 import argparse
@@ -41,9 +41,11 @@ def init_employee(
     chat_id: str,
     template_folder: str, 
     root_dir: Path, 
+    create_branch: bool = True,
     push_remote: bool = True
 ):
     name_clean = name.strip().lower().replace(" ", "_")
+    branch_name = f"{name_clean}"
     profile_dir = root_dir / "profiles" / name_clean
     template_soul = root_dir / "templates" / template_folder / "SOUL.md"
 
@@ -57,15 +59,20 @@ def init_employee(
     print(f" Target Folder: profiles/{name_clean}/")
     print(f" Role: {role}")
     print(f" Template: {template_folder}")
-    print(f" Target Branch: main")
+    print(f" Target Branch: {branch_name if create_branch else 'current'}")
     print(f"==================================================\n")
 
-    # 1. Build profile subdirectories
+    # 1. Switch or create local git branch BEFORE creating files
+    if create_branch:
+        print(f"[*] Creating and checking out local Git branch '{branch_name}'...")
+        run_git_command(["git", "checkout", "-b", branch_name], cwd=root_dir)
+
+    # 2. Build profile subdirectories
     profile_dir.mkdir(parents=True, exist_ok=True)
     memories_dir = profile_dir / "memories"
     memories_dir.mkdir(parents=True, exist_ok=True)
 
-    # 2. Copy blueprint SOUL.md or write a fallback
+    # 3. Copy blueprint SOUL.md or write a fallback
     profile_soul = profile_dir / "SOUL.md"
     if template_soul.exists():
         print(f"[*] Copying blueprint persona from '{template_folder}/SOUL.md'...")
@@ -80,14 +87,14 @@ Directives:
 """
         profile_soul.write_text(soul_md_content, encoding="utf-8")
 
-    # 3. Write profile config.yaml
+    # 4. Write profile config.yaml
     profile_config_content = f"""# Profile Configuration for {name}
 agent:
   name: "{name.title()} - {role} Bot"
 
 telegram:
   enabled: true
-  bot_token: {bot_token_val}
+  bot_token: "{bot_token_val}"
   bot_token_env: {env_token_key}
   allowed_chat_id: {chat_id if chat_id else 0}
   dm_policy: open
@@ -111,7 +118,7 @@ providers:
     config_file.write_text(profile_config_content, encoding="utf-8")
     print(f"[+] Created: {config_file.relative_to(root_dir)}")
 
-    # 4. Write personalized USER.md
+    # 5. Write personalized USER.md
     user_md_content = f"""# User Profile: {name}
 
 - **Name:** {name}
@@ -126,28 +133,29 @@ providers:
     user_file.write_text(user_md_content, encoding="utf-8")
     print(f"[+] Created: {user_file.relative_to(root_dir)}")
 
-    # 5. Write personalized MEMORY.md
+    # 6. Write personalized MEMORY.md
     memory_md_content = f"""# Working Memory for {name}
 
-- **Branch:** `main`
+- **Branch:** `{branch_name if create_branch else 'main'}`
 - **Active Role:** {role}
 """
     mem_file = memories_dir / "MEMORY.md"
     mem_file.write_text(memory_md_content, encoding="utf-8")
     print(f"[+] Created: {mem_file.relative_to(root_dir)}")
 
-    # 6. Commit & push directly on main
-    print(f"[*] Staging and committing profile files on 'main'...")
-    run_git_command(["git", "add", f"profiles/{name_clean}"], cwd=root_dir)
-    run_git_command(["git", "commit", "-m", f"feat(profile): initialize agent environment for {name_clean}"], cwd=root_dir)
+    # 7. Commit & push branch to GitHub
+    if create_branch:
+        print(f"[*] Staging and committing profile files to '{branch_name}'...")
+        run_git_command(["git", "add", f"profiles/{name_clean}"], cwd=root_dir)
+        run_git_command(["git", "commit", "-m", f"feat(profile): initialize agent environment for {name_clean}"], cwd=root_dir)
 
-    if push_remote:
-        print(f"[*] Pushing changes to origin main...")
-        push_res = run_git_command(["git", "push", "origin", "main"], cwd=root_dir)
-        if push_res is not None:
-            print(f"[+] Successfully published profile to GitHub main.")
+        if push_remote:
+            print(f"[*] Pushing branch '{branch_name}' to GitHub...")
+            push_res = run_git_command(["git", "push", "-u", "origin", branch_name], cwd=root_dir)
+            if push_res is not None:
+                print(f"[+] Successfully published '{branch_name}' to GitHub remote.")
 
-    print(f"\n[+] Successfully onboarded {name} into profiles/{name_clean}/")
+    print(f"\n[+] Successfully onboarded {name} into profiles/{name_clean}/ on branch '{branch_name}'")
     print(f"    Run agent using: python main.py --profile {name_clean}\n")
 
 
@@ -161,7 +169,8 @@ def main():
         default="fullstack", 
         help=f"Template key/alias ({', '.join(TEMPLATE_MAP.keys())}) or folder name"
     )
-    parser.add_argument("--no-push", action="store_true", help="Do not push commit to GitHub automatically")
+    parser.add_argument("--no-branch", action="store_true", help="Do not create git branch")
+    parser.add_argument("--no-push", action="store_true", help="Do not push branch to GitHub automatically")
 
     args = parser.parse_args()
     root_dir = Path(__file__).resolve().parent
@@ -174,6 +183,7 @@ def main():
         chat_id=args.chat_id,
         template_folder=template_folder,
         root_dir=root_dir,
+        create_branch=not args.no_branch,
         push_remote=not args.no_push
     )
 
