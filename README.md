@@ -55,7 +55,7 @@ A comprehensive Standard Operating Procedure (SOP) for deploying and configuring
 
 ---
 
-### 3. Clone Repository with PAT Authentication
+### 3. Clone Repository
 
 
 1. **Clone Repository**:
