@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=miam
+User=root
 WorkingDirectory=/opt/hermes
 EnvironmentFile=/opt/hermes/.env
 
