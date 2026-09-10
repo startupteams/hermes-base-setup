@@ -48,7 +48,7 @@ Before beginning the deployment, ensure the following are available:
 4. Save the HTTP API token.
 
 > **Example:**
-> `"8929783253:AAF80DFFfdRSVH9WYz0hT91JoDUJhk010mX0"`
+> `"0123456789:ABCdEfGhijklmnoPqrstuVwzyZ"`
 
 > **Note:** Always wrap tokens containing colons in double quotes when placing them in configuration files.
 
@@ -59,7 +59,7 @@ Before beginning the deployment, ensure the following are available:
 3. Save the numeric user/chat ID.
 
 > **Example:**
-> `5323393142`
+> `0123456789`
 
 ---
 
@@ -194,10 +194,10 @@ Use one of the following values for `--template`:
 
 ```bash
 /opt/hermes/.venv/bin/python init_employee.py \
-  --name biraj \
+  --name john \
   --role "AI/ML Intern" \
   --template aiml \
-  --chat-id 5323393142
+  --chat-id 0123456789
 ```
 
 ### 6.4 Create the Runtime Profile Symlink
