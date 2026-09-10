@@ -83,13 +83,13 @@ Create a new class-level skill when:
 ## Multi-Profile / Memory-Security Audit Practice (session-derived)
 
 When a task involves hermes agent memory (state.db, memories/, auth.json, profile branches):
-
 - Always check `/opt/hermes/skills` first (skill-first-workflow).
 - Before changing core engine / memory schemas or fine-tuning arrays, ask user confirmation.
 - When multi-profile isolation is relevant (`profiles/biraj/` vs `profiles/robin/` branches): verify cross-branch file access (same repo clone = same filesystem), `auth.json`, `state.db`, `memories/`, `gateway_routing`, `init_employee.py` defaults.
 - Security audit pattern: list profile files (`find -ls`), check `.gitignore` for auth, `chmod` on `auth.json` vs `MEMORY.md`, DB WAL mode / FTS5 sanitization, note branch isolation ≠ filesystem isolation.
+- Profile artifact cleanup: when cleaning redundant artifacts (`models_dev_cache.json`, `cache/`, `logs/`, `auth.lock`, `sessions/`), ALWAYS preserve `cron/` and `skills/`. Log failures; use absolute paths in cron entries.
 - Capture fix proposals but do NOT apply without explicit confirmation.
-- References: `references/memory-security-audit.md`.
+- References: `references/memory-security-audit.md`, `references/profile-cleanup-pattern.md` (script: `/opt/hermes/scripts/cleanup_profile_redundant.py`; preserve `cron/` + `skills/`; cron `*/15`; log to `cron/cleanup.log`).
 
 ## Skill Update Signals
 

@@ -38,7 +38,9 @@ Use this workflow before **every** user task, including simple requests, researc
 
 ## Pitfalls
 
-- Do not begin the task before scanning `/opt/hermes/skills`.
+- Do not begin the task before scanning `/opt/hermes/skills` (standing user rule; enforce via memory + workflow step 1).
+- When user says "only change if really needed" or "no changes now," prefer confirmation over execution; capture as pitfall.
+- For multi-profile repo security audits (e.g., `profiles/biraj` isolation, `.env`, FTS5, `state.db` WAL): verify profile-dir `chmod`, `.env` isolation, and audit logging — do not assume branch isolation = filesystem isolation.
 - Do not treat an empty `skills_list` response as proof that no skills exist; inspect the installed directory.
 - Do not create a one-session skill for a recurring workflow; use or extend a class-level umbrella.
 - Do not claim a paper is “latest” without an explicit date sort and metadata check.
