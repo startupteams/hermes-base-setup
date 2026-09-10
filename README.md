@@ -48,7 +48,7 @@ Before beginning the deployment, ensure the following are available:
 4. Save the HTTP API token.
 
 > **Example:**
-> `"8929783253:AAF80DFFfdRSVH9WYz0hT91JoDUJhk010mX0"`
+> `"0123456789:ABCdEfGhijklmnoPqrstuVwzyZ"`
 
 > **Note:** Always wrap tokens containing colons in double quotes when placing them in configuration files.
 
@@ -59,7 +59,7 @@ Before beginning the deployment, ensure the following are available:
 3. Save the numeric user/chat ID.
 
 > **Example:**
-> `5323393142`
+> `0123456789`
 
 ---
 
@@ -194,10 +194,10 @@ Use one of the following values for `--template`:
 
 ```bash
 /opt/hermes/.venv/bin/python init_employee.py \
-  --name biraj \
+  --name john \
   --role "AI/ML Intern" \
   --template aiml \
-  --chat-id 5323393142
+  --chat-id 0123456789
 ```
 
 ### 6.4 Create the Runtime Profile Symlink
@@ -236,20 +236,10 @@ systemctl enable --now hermes-agent@<employee_name>
 
 ## 8. Automate Branch Memory Synchronization
 
-### 8.1 Create the Synchronization Script
+### 8.1 Create executable Synchronization Script
 
-The following script stages profile changes, commits the current agent state, and pushes the active branch to the remote repository:
 
 ```bash
-cat << 'EOF' > /opt/hermes/scripts/sync_memory.sh
-#!/bin/bash
-cd /opt/hermes || exit
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-git add profiles/
-git commit -m "chore(memory): sync agent state [skip ci]"
-git push origin "$CURRENT_BRANCH"
-EOF
-
 chmod +x /opt/hermes/scripts/sync_memory.sh
 ```
 
