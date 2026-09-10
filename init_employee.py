@@ -67,10 +67,11 @@ def init_employee(
         print(f"[*] Creating and checking out local Git branch '{branch_name}'...")
         run_git_command(["git", "checkout", "-b", branch_name], cwd=root_dir)
 
-    # 2. Build profile subdirectories
+    # 3. Build profile subdirectories (only required dirs: memories, skills, cron kept per instruction)
     profile_dir.mkdir(parents=True, exist_ok=True)
     memories_dir = profile_dir / "memories"
     memories_dir.mkdir(parents=True, exist_ok=True)
+    # Note: do NOT create redundant cache/, bin/, logs/, sessions/ per profile
 
     # 3. Copy blueprint SOUL.md or write a fallback
     profile_soul = profile_dir / "SOUL.md"
@@ -117,6 +118,13 @@ providers:
     config_file = profile_dir / "config.yaml"
     config_file.write_text(profile_config_content, encoding="utf-8")
     print(f"[+] Created: {config_file.relative_to(root_dir)}")
+
+    # Suppress per-profile redundant file generation at runtime
+    env_file = profile_dir / ".env"
+    env_content = "DISABLE_MODEL_CACHE=1\nNO_PER_PROFILE_CACHE=1\n"
+    env_file.write_text(env_content, encoding="utf-8")
+    env_file.chmod(0o600)
+    print(f"[+] Suppression env: {env_file}")
 
     # 5. Write personalized USER.md
     user_md_content = f"""# User Profile: {name}
