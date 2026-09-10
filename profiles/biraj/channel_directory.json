@@ -1,0 +1,13 @@
+{
+  "updated_at": "2026-09-10T09:10:48.452538",
+  "platforms": {
+    "telegram": [
+      {
+        "id": "8595794292",
+        "name": "MIAM USA",
+        "type": "dm",
+        "thread_id": null
+      }
+    ]
+  }
+}

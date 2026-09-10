@@ -1,0 +1,28 @@
+{
+  "agent-task-workflow": {
+    "archived_at": null,
+    "created_at": "2026-09-10T05:26:06.661266+00:00",
+    "created_by": "agent",
+    "last_patched_at": null,
+    "last_used_at": "2026-09-10T05:26:19.115891+00:00",
+    "last_viewed_at": "2026-09-10T05:26:19.114021+00:00",
+    "patch_count": 0,
+    "pinned": false,
+    "state": "active",
+    "use_count": 1,
+    "view_count": 1
+  },
+  "skill-first-workflow": {
+    "archived_at": null,
+    "created_at": "2026-09-10T05:18:43.308277+00:00",
+    "created_by": "agent",
+    "last_patched_at": "2026-09-10T05:19:17.532205+00:00",
+    "last_used_at": "2026-09-10T05:19:14.430695+00:00",
+    "last_viewed_at": "2026-09-10T05:19:14.419015+00:00",
+    "patch_count": 1,
+    "pinned": false,
+    "state": "active",
+    "use_count": 1,
+    "view_count": 1
+  }
+}
