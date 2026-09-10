@@ -236,20 +236,10 @@ systemctl enable --now hermes-agent@<employee_name>
 
 ## 8. Automate Branch Memory Synchronization
 
-### 8.1 Create the Synchronization Script
+### 8.1 Create executable Synchronization Script
 
-The following script stages profile changes, commits the current agent state, and pushes the active branch to the remote repository:
 
 ```bash
-cat << 'EOF' > /opt/hermes/scripts/sync_memory.sh
-#!/bin/bash
-cd /opt/hermes || exit
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-git add profiles/
-git commit -m "chore(memory): sync agent state [skip ci]"
-git push origin "$CURRENT_BRANCH"
-EOF
-
 chmod +x /opt/hermes/scripts/sync_memory.sh
 ```
 
