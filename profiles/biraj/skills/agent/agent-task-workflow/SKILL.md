@@ -80,6 +80,17 @@ Create a new class-level skill when:
 - Negative claims about tools or features that may be fixed later
 - Task narratives (e.g., "summarize today's market") — these are not classes of work
 
+## Multi-Profile / Memory-Security Audit Practice (session-derived)
+
+When a task involves hermes agent memory (state.db, memories/, auth.json, profile branches):
+
+- Always check `/opt/hermes/skills` first (skill-first-workflow).
+- Before changing core engine / memory schemas or fine-tuning arrays, ask user confirmation.
+- When multi-profile isolation is relevant (`profiles/biraj/` vs `profiles/robin/` branches): verify cross-branch file access (same repo clone = same filesystem), `auth.json`, `state.db`, `memories/`, `gateway_routing`, `init_employee.py` defaults.
+- Security audit pattern: list profile files (`find -ls`), check `.gitignore` for auth, `chmod` on `auth.json` vs `MEMORY.md`, DB WAL mode / FTS5 sanitization, note branch isolation ≠ filesystem isolation.
+- Capture fix proposals but do NOT apply without explicit confirmation.
+- References: `references/memory-security-audit.md`.
+
 ## Skill Update Signals
 
 Update a skill when any of these fire:
