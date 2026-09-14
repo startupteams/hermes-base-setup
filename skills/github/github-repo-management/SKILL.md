@@ -4,7 +4,6 @@ description: "Clone/create/fork repos; manage remotes, releases."
 version: 1.1.0
 author: Hermes Agent
 license: MIT
-platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [GitHub, Repositories, Git, Releases, Secrets, Configuration]
@@ -18,6 +17,12 @@ Create, clone, fork, configure, and manage GitHub repositories. Each section sho
 ## Prerequisites
 
 - Authenticated with GitHub (see `github-auth` skill)
+- **Troubleshooting GitHub CLI Authentication**: If `gh auth status` fails despite having `GITHUB_TOKEN` exported, try:
+  1. Unset the environment variable: `unset GITHUB_TOKEN`
+  2. Run `gh auth login` and authenticate via browser or paste token when prompted
+  3. Alternatively, use direct curl commands with `-H "Authorization: token $GITHUB_TOKEN"` for API calls
+  4. Note that `gh` commands may not always pick up `GITHUB_TOKEN` from environment in some contexts
+- **Important**: Always verify authentication before proceeding. If `gh auth status` fails, run `gh auth login` to authenticate.
 
 ### Setup
 
@@ -30,7 +35,7 @@ else
     if [ -f ~/.hermes/.env ] && grep -q "^GITHUB_TOKEN=" ~/.hermes/.env; then
       GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" ~/.hermes/.env | head -1 | cut -d= -f2 | tr -d '\n\r')
     elif grep -q "github.com" ~/.git-credentials 2>/dev/null; then
-      GITHUB_TOKEN=$(grep "github.com" ~/.git-credentials 2>/dev/null | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
+      GITHUB_TOKEN=$(grep "github.com" ~/.git-credentials 2>/dev/null | head -1 | sed 's|https://[^:]*:\\([^@]*\\)@.*|\\1|')
     fi
   fi
 fi
@@ -81,6 +86,25 @@ git clone git@github.com:owner/repo-name.git
 gh repo clone owner/repo-name
 gh repo clone owner/repo-name -- --depth 1
 ```
+
+## SOUL.md / Agent Profile Resource Repositories
+
+When a Hermes profile `SOUL.md` or agent identity file lists resource repositories to consult or edit, treat it as a repository-management task:
+
+- Read the active profile's `SOUL.md` first and extract bot name, repo URLs, allowed GitHub org/owner boundaries, Git identity, and branch rules.
+- Use a stable profile-local workspace such as `~/.hermes/profiles/<profile>/resource_repositories/`.
+- Convert GitHub `/tree/<branch>/<path>` URLs to clone URLs, clone/fetch each repo, and check out the bot-name branch (for example `c01entrepreneur_bot`) when present.
+- If `origin/<bot_name>` does not exist, create a local bot-name branch from the remote default branch.
+- Verify origin URL, branch, upstream, HEAD, and dirty status before reporting completion.
+- If a referenced `github.com/<org>/<repo>` returns API `404` or HTTPS clone requests credentials, report it as likely private/inaccessible and ask for GitHub auth/access rather than guessing an alternate source.
+- For the entrepreneur profile/Jordan work, treat the allowed GitHub owner boundary as authoritative: use only `jordatech/*` repositories unless the user explicitly authorizes another owner in the current turn. If the user links a non-`jordatech` repo by mistake and then corrects it, stop using that source, fetch the equivalent `jordatech` source, and verify the remote URL before checkout/copy/commit.
+- In Hermes profile sandboxes, a repo can appear unauthenticated even when `gh auth status` works from the real user home. For `git fetch`, `git pull --rebase`, `git push`, and `git ls-remote`, prefer `HOME=/home/$USER` (and `GH_CONFIG_DIR=/home/$USER/.config/gh` for `gh` if needed). `gh auth setup-git` alone may not fix raw `git` commands when the active profile `HOME` is different from the real user home.
+
+See `references/soul-resource-repositories.md` for the reusable checkout/sync script pattern, verification checklist, exact-match SOUL sync pitfalls, and pitfalls from the entrepreneur profile setup, including the Hermes profile-HOME vs real-user-HOME GitHub auth quirk.
+
+See `references/github-auth-troubleshooting.md` for troubleshooting GitHub CLI authentication issues when environment variables are not picked up correctly.
+
+See `references/noninteractive-fork-import-and-git-auth.md` for the fallback pattern when GitHub forking is disabled, `jordatech` is a user account rather than an org, or HTTPS git pushes fail in non-interactive sessions despite valid `gh` auth.
 
 ## 2. Creating Repositories
 

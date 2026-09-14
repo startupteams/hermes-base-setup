@@ -1,0 +1,33 @@
+# LiteLLM proxy config — local vLLM fleet only (no cloud fallback)
+# Copy to /etc/llm-manager/litellm_config.yaml; substitute master_key + database_url
+# from root-only secret files. Each model_list entry under the SAME model_name is a
+# load-balanced replica. Never add OpenRouter here until global spend caps exist.
+
+model_list:
+  - model_name: startupteams/general
+    litellm_params:
+      model: openai/qwen3.6-35b-a3b
+      api_base: http://10.0.20.161:8000/v1   # MIAM-00111 / VM103 (ctx 262144)
+      api_key: local-00111
+  - model_name: startupteams/general
+    litellm_params:
+      model: openai/qwen3.6-35b-a3b
+      api_base: http://10.0.20.163:8000/v1   # MIAM-00143 / VM109
+      api_key: local-00143
+  - model_name: startupteams/general
+    litellm_params:
+      model: openai/qwen3.6-35b-a3b
+      api_base: http://10.0.20.164:8000/v1   # MIAM-00144 / VM111
+      api_key: local-00144
+  # MIAM-00112 (.162) intentionally absent until its vLLM service is verified healthy;
+  # note its max_model_len is 32768 (differs from .161) — same model id, different envelope.
+
+litellm_settings:
+  drop_params: true        # Hermes sends OpenAI-only params vLLM rejects
+  num_retries: 1
+  request_timeout: 600
+
+general_settings:
+  master_key: REPLACE_FROM_SECRET_FILE
+  database_url: postgresql://llmmanager:REPLACE@10.0.20.115:5432/litellm
+  store_model_in_db: true
