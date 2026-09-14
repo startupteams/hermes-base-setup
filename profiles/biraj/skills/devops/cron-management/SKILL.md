@@ -107,8 +107,18 @@ After any change:
 3. Confirm job removed from list for deleted jobs
 4. Check `next_run_at` is reasonable for schedule changes
 
+## Proxmox Access via LLAP Domain (session 2026-09-14) — username/password (no API keys)
+
+When accessing Proxmox / 10.0.20.135:8006 with only username + password (LLDAP-backed):
+- Choose `LLLDAP-Domain` as realm (verify via `GET /api2/json/access/domains`).
+- Credentials file: `~/.pve_ldap_bot` (2 lines: username, password; `chmod 600`).
+- Use `scripts/pve_api.py` (from this skill) for API calls; send `PVEAuthCookie` + `CSRFPreventionToken`.
+- Wrapper script: `/opt/hermes/scripts/proxmox_wrapper.py` delegates to `pve_api.py`; supports start/stop/status/create/configure.
+- Safety (from skill body): NEVER restart nodes `miam-00133` / `miam-00135` (critical services / bot VMs). Confirm live PDU labels before cycles on `miam-00147`.
+- Skill selection: this is global/infrastructure work → use `devops/proxmox-cluster-infrastructure` + agent's own; profile skills for config only.
+
 ## References
 
-- `references/error-patterns.md` — Detailed error messages and fixes
+- `references/job-storage-layout.md` — Where cron data lives on disk
 - `references/job-storage-layout.md` — Where cron data lives on disk
 - `references/session-2026-09-14-cron-system-vs-hermes.md` — System vs Hermes cron; verification before pull; user-correction protocol

@@ -16,14 +16,14 @@
     "archived_at": null,
     "created_at": "2026-09-14T09:02:44.780108+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-09-14T10:16:50.325861+00:00",
-    "last_used_at": "2026-09-14T10:17:14.074334+00:00",
-    "last_viewed_at": "2026-09-14T10:17:14.072440+00:00",
-    "patch_count": 8,
+    "last_patched_at": "2026-09-14T11:56:54.527852+00:00",
+    "last_used_at": "2026-09-14T11:56:43.957629+00:00",
+    "last_viewed_at": "2026-09-14T11:56:43.948131+00:00",
+    "patch_count": 9,
     "pinned": false,
     "state": "active",
-    "use_count": 10,
-    "view_count": 10
+    "use_count": 11,
+    "view_count": 11
   },
   "skill-first-workflow": {
     "archived_at": null,
