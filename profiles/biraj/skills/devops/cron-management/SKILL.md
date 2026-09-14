@@ -97,6 +97,7 @@ On pushback ("shouldn't exist", "check again"): re-list; read `jobs.json` `last_
 4. **Profile-specific storage** — cron jobs live per-profile at `~/.hermes/profiles/<profile>/cron/`
 5. **Background jobs need `notify_on_complete`** — when creating long-running cron jobs via terminal, always pair with notification
 6. **Distinguish system cron from Hermes cron** — `crontab -l` / `/etc/crontab` / `/etc/cron.d/` scripts don't appear in `cronjob list`. Before declaring a job missing, check system level (learned: `sync_memory.sh` exists in root crontab but not Hermes list — user meant system-level job). Confirm repo/branch/auth before pulling skills from external source; user corrected assumption about which repo (`agentifyme_...` vs `hermes-base-setup`) and which folder (`skills/` only, not full profile replacement).
+7. **Check both skills storage layers** — global `/opt/hermes/skills/` (managed by `.curator_state`, `.bundled_manifest`) vs per-profile `~/.hermes/profiles/<p>/skills/`. Updates can land in only one; verify both when user says "skills updated."
 
 ## Verification Steps
 
