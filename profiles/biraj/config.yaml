@@ -1,25 +1,50 @@
 # Profile Configuration for biraj
+
 agent:
+
   name: "Biraj - AI / ML Engineer Intern Bot"
 
+
+
 telegram:
+
   enabled: true
+
   bot_token: ""
+
   bot_token_env: TELEGRAM_BOT_TOKEN_BIRAJ
+
   allowed_chat_id: 8595794292
+
   dm_policy: open
+
   telegram_allowed_users: 8595794292
 
+
+
 onboarding:
+
   seen:
+
     profile_build_offered: true
 
+
+
 model:
+
   provider: openrouter
+
   default: openrouter/free
+
   max_tokens: 8192
 
+
+
 providers:
+
   openrouter:
+
     api: https://openrouter.ai/api/v1/chat/completions
-    key_env: OPENROUTER_API_KEY
+
+    key_env: OPENROUTER_API_KEY 
+

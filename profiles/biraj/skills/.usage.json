@@ -12,6 +12,19 @@
     "use_count": 5,
     "view_count": 5
   },
+  "cron-management": {
+    "archived_at": null,
+    "created_at": "2026-09-14T09:02:44.780108+00:00",
+    "created_by": "agent",
+    "last_patched_at": "2026-09-14T09:02:50.233137+00:00",
+    "last_used_at": null,
+    "last_viewed_at": null,
+    "patch_count": 2,
+    "pinned": false,
+    "state": "active",
+    "use_count": 0,
+    "view_count": 0
+  },
   "skill-first-workflow": {
     "archived_at": null,
     "created_at": "2026-09-10T05:18:43.308277+00:00",
