@@ -1,0 +1,1 @@
+User manages profiles under /opt/hermes with git remotes to startupteams repos (hermes-base-setup); uses system-level cron for sync_memory.sh; interested in pulling skills from agent_stea004_entrepreneur profile (jordatech_crmmiam02_906 branch) into biraj profile.

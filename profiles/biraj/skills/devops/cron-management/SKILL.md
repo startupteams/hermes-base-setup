@@ -72,6 +72,23 @@ cronjob action=remove job_id=<id>
 | "skill not found" | Referenced skill missing | Install skill or remove from job |
 | "workdir missing" | Directory doesn't exist | Create directory or update workdir |
 
+## System-Level vs Hermes Cron (learned 2026-09-14)
+
+Hermes `cronjob` (profile-level) ≠ OS `crontab`. System-level jobs live in `crontab -l`, `/etc/crontab`, `/etc/cron.d/` — they do not appear in `cronjob action=list`. Before creating a new Hermes cron for something that "should exist", check system level. This session produced an erroneous Hermes `sync-memory` job (`4215cce15e18`, created, then removed) because the user meant the system-level `sync_memory.sh`.
+
+```
+crontab -l | grep <keyword>
+ls -la /opt/hermes/scripts/<script>
+```
+
+## Script-Existence Trap
+
+Always verify target script exists (`ls <path>`) before declaring a broken job fixable. Session: `cleanup_profile_redundant.py` missing; only `sync_memory.sh` present.
+
+## Verification Before Assumption (user-correction signal)
+
+On pushback ("shouldn't exist", "check again"): re-list; read `jobs.json` `last_error`; confirm filesystem; then confirm disable/remove with fresh list showing `enabled: false` / `state: paused`.
+
 ## Pitfalls
 
 1. **Don't guess job IDs** — always `list` first, then use the exact `job_id` from the result
@@ -79,6 +96,7 @@ cronjob action=remove job_id=<id>
 3. **Jobs without models fail silently** — they show "error" status but no delivery unless you check `last_error`
 4. **Profile-specific storage** — cron jobs live per-profile at `~/.hermes/profiles/<profile>/cron/`
 5. **Background jobs need `notify_on_complete`** — when creating long-running cron jobs via terminal, always pair with notification
+6. **Distinguish system cron from Hermes cron** — `crontab -l` / `/etc/crontab` / `/etc/cron.d/` scripts don't appear in `cronjob list`. Before declaring a job missing, check system level (learned: `sync_memory.sh` exists in root crontab but not Hermes list — user meant system-level job). Confirm repo/branch/auth before pulling skills from external source; user corrected assumption about which repo (`agentifyme_...` vs `hermes-base-setup`) and which folder (`skills/` only, not full profile replacement).
 
 ## Verification Steps
 
@@ -92,3 +110,4 @@ After any change:
 
 - `references/error-patterns.md` — Detailed error messages and fixes
 - `references/job-storage-layout.md` — Where cron data lives on disk
+- `references/session-2026-09-14-cron-system-vs-hermes.md` — System vs Hermes cron; verification before pull; user-correction protocol

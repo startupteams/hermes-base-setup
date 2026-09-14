@@ -4,38 +4,38 @@
     "created_at": "2026-09-10T05:26:06.661266+00:00",
     "created_by": "agent",
     "last_patched_at": "2026-09-10T10:48:02.879922+00:00",
-    "last_used_at": "2026-09-10T10:48:16.549116+00:00",
-    "last_viewed_at": "2026-09-10T10:48:16.539184+00:00",
+    "last_used_at": "2026-09-14T09:19:43.846217+00:00",
+    "last_viewed_at": "2026-09-14T09:19:43.837391+00:00",
     "patch_count": 5,
     "pinned": false,
     "state": "active",
-    "use_count": 5,
-    "view_count": 5
+    "use_count": 6,
+    "view_count": 6
   },
   "cron-management": {
     "archived_at": null,
     "created_at": "2026-09-14T09:02:44.780108+00:00",
     "created_by": "agent",
-    "last_patched_at": "2026-09-14T09:02:50.233137+00:00",
-    "last_used_at": null,
-    "last_viewed_at": null,
-    "patch_count": 2,
+    "last_patched_at": "2026-09-14T09:26:40.744800+00:00",
+    "last_used_at": "2026-09-14T09:26:26.392213+00:00",
+    "last_viewed_at": "2026-09-14T09:26:26.382740+00:00",
+    "patch_count": 7,
     "pinned": false,
     "state": "active",
-    "use_count": 0,
-    "view_count": 0
+    "use_count": 8,
+    "view_count": 8
   },
   "skill-first-workflow": {
     "archived_at": null,
     "created_at": "2026-09-10T05:18:43.308277+00:00",
     "created_by": "agent",
     "last_patched_at": "2026-09-10T10:35:27.772360+00:00",
-    "last_used_at": "2026-09-10T10:47:36.786478+00:00",
-    "last_viewed_at": "2026-09-10T10:47:36.783692+00:00",
+    "last_used_at": "2026-09-14T09:19:43.850523+00:00",
+    "last_viewed_at": "2026-09-14T09:19:43.841856+00:00",
     "patch_count": 2,
     "pinned": false,
     "state": "active",
-    "use_count": 3,
-    "view_count": 3
+    "use_count": 4,
+    "view_count": 4
   }
 }
