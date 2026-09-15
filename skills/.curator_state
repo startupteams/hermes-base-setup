@@ -1,9 +1,9 @@
 {
-  "last_report_path": "/home/jordatech/.hermes/profiles/agent_stea004_entrepreneur/logs/curator/20260908-053018",
-  "last_run_at": "2026-09-08T05:30:18.977688+00:00",
-  "last_run_duration_seconds": 0.339686,
-  "last_run_summary": "auto: 2 marked stale, 4 reactivated; llm: skipped (consolidation off)",
+  "last_report_path": "/home/jordatech/.hermes/profiles/agent_stea004_entrepreneur/logs/curator/20260915-060500",
+  "last_run_at": "2026-09-15T06:05:00.856796+00:00",
+  "last_run_duration_seconds": 0.244822,
+  "last_run_summary": "auto: 1 reactivated; llm: skipped (consolidation off)",
   "last_run_summary_shown_at": "2026-05-19T12:34:06.104452+00:00",
   "paused": false,
-  "run_count": 14
+  "run_count": 15
 }

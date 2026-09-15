@@ -1,0 +1,94 @@
+{
+  "jobs": [
+    {
+      "id": "37a454b1279d",
+      "name": "hermes-stea-crmmiam02-backup",
+      "prompt": "Run the following bash command exactly:\n\n```bash\ncd ~/.hermes\ngit pull || { echo \"ERROR: git pull failed\"; exit 1; }\ngit push || true\ngit add -A\nif ! git diff --cached --quiet; then\n  git commit -m \"hermes STEA CRMMIAM02 VIRTUAL_MACHINE_UID=906 backup: $(date +'%Y-%m-%d %H-%M-%S')\"\nelse\n  git commit --allow-empty -m \"hermes STEA CRMMIAM02 VIRTUAL_MACHINE_UID=906 backup: $(date +'%Y-%m-%d %H-%M-%S')\"\nfi\ngit pull --rebase || { echo \"ERROR: git pull --rebase failed\"; exit 1; }\ngit push || echo \"WARN: git push failed (may be up to date)\"\n```\n\nIf any step fails, report the error. Do not prompt or ask for confirmation.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "hermes-stea-crmmiam02-backup.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 5,
+        "display": "every 5m"
+      },
+      "schedule_display": "every 5m",
+      "repeat": {
+        "times": null,
+        "completed": 17471
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-23T04:05:27.256752+00:00",
+      "next_run_at": "2026-09-15T06:05:24.132226+00:00",
+      "last_run_at": "2026-09-15T06:00:24.132226+00:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": {
+        "platform": "telegram",
+        "chat_id": "8669411205",
+        "chat_name": "J",
+        "thread_id": null
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null
+    },
+    {
+      "id": "9696240e9468",
+      "name": "MIAM-00112 PCIe/ECC watchdog",
+      "prompt": "Run the MIAM-00112 PCIe/ECC error monitor and report any NEW flag. Execute: source the script at ~/.hermes/profiles/agent_stea004_entrepreneur/scripts/miam_pcie_watch.sh. This script SSHes to 10.0.20.112 and runs /usr/local/sbin/miam_pcie_monitor.sh which emits output ONLY when the PCIe/ECC/Xid/AER/GPU-presence/link state changed since the last check. If the script prints a report, that means a new flag appeared \u2014 forward it to the user as an alert, highlighting anything that could indicate PCIe slot / CPU pin high-impedance (Xid errors, link-width drops, uncorrectable ECC, missing GPUs, AER errors). If the script produces no output, stay silent (healthy). Do not fabricate results; only report real script output.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "provider_snapshot": "openrouter",
+      "model_snapshot": "deepseek/deepseek-v4-flash-0731",
+      "base_url": null,
+      "script": "miam_pcie_watch.sh",
+      "no_agent": false,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/20 * * * *",
+        "display": "*/20 * * * *"
+      },
+      "schedule_display": "*/20 * * * *",
+      "repeat": {
+        "times": null,
+        "completed": 454
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-09-08T22:15:52.640425+00:00",
+      "next_run_at": "2026-09-15T06:20:00+00:00",
+      "last_run_at": "2026-09-15T06:00:22.369978+00:00",
+      "last_status": "error",
+      "last_error": "RuntimeError: Skipped to prevent unintended spend: global inference config drifted since this job was created (provider 'openrouter' -> 'custom'; model 'deepseek/deepseek-v4-flash-0731' -> 'qwen3.6-35b-a3b'), and this job is unpinned. No inference call was made. To run on the new config, pin it explicitly: `cronjob action=update job_id=9696240e9468 provider=<provider> model=<model>` (or pin the original values to keep them). See #44585.",
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": {
+        "platform": "telegram",
+        "chat_id": "8669411205",
+        "chat_name": "J",
+        "thread_id": null,
+        "user_id": "8669411205"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null
+    }
+  ],
+  "updated_at": "2026-09-15T06:00:24.132279+00:00"
+}
