@@ -1,7 +1,7 @@
 ---
 name: cron-management
 category: devops
-description: Manage, troubleshoot, and investigate Hermes cron jobs — list jobs, diagnose failures, pause/remove broken jobs, and fix common misconfigurations.
+description: Manage, troubleshoot, and investigate Hermes cron jobs — list jobs, diagnose failures, pause/remove broken jobs, and fix common misconfigurations. Also manage system-level cron jobs (e.g., /opt/hermes/scripts/sync_memory.sh) that run outside Hermes.
 ---
 
 # Cron Management Skill
@@ -88,6 +88,19 @@ Always verify target script exists (`ls <path>`) before declaring a broken job f
 ## Verification Before Assumption (user-correction signal)
 
 On pushback ("shouldn't exist", "check again"): re-list; read `jobs.json` `last_error`; confirm filesystem; then confirm disable/remove with fresh list showing `enabled: false` / `state: paused`.
+
+## Script-Existence Trap (session signal)
+
+When a Hermes cron job references a script, always verify the script path exists (`ls <path>`) before attempting to fix. Session: `cleanup_profile_redundant.py` missing; only `sync_memory.sh` present. Create script first, then update prompt/script path.
+
+## System-Level vs Hermes Cron (learned 2026-09-14)
+
+Hermes `cronjob` (profile-level) ≠ OS `crontab`. System-level jobs live in `crontab -l`, `/etc/crontab`, `/etc/cron.d/` — they don't appear in `cronjob action=list`. Before declaring job missing, check system level (session produced erroneous `sync-memory` `4215cce15e18`, then removed). Confirm repo/branch/auth before pulling skills from external source; user corrected assumption (`agentifyme_` vs `hermes-base-setup`; `skills/` folder only, not full profile replacement).
+
+```
+crontab -l | grep <keyword>
+ls -la /opt/hermes/scripts/<script>
+```
 
 ## Pitfalls
 

@@ -5,3 +5,7 @@ User directs: profile-config tasks → use profile skills (/opt/hermes/profiles/
 Skill update 2026-09-14: patched profile cron-management (devops) with LLAP/Proxmox access, system-vs-Hermes cron pitfall, two-skills-storage check. Overlap with global proxmox-cluster-infrastructure.
 §
 User operates in profile-configuration context with preference for global skills (not profile-specific). System-level cron jobs preferred over Hermes-managed cron jobs. Skills folder at /opt/hermes/skills/ is primary reference. Prefers minimal intervention - only disable/pause broken jobs rather than remove entirely. Values verification of system state before making changes.
+§
+Active model switched to z-ai/glm-5.3-flash (from openrouter/free). Applied to Hermes default profile — future turns should reference this model.
+§
+Active model set to z-ai/glm-5.3-flash via hermes config set (profile biraj). Confirmed in config.yaml line 37.
