@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "manifest": {
+    "agent/agent-task-workflow/SKILL.md": [
+      1789109858019617636,
+      5520
+    ],
+    "general/skill-first-workflow/SKILL.md": [
+      1789109858020104785,
+      4942
+    ],
+    "devops/cron-management/SKILL.md": [
+      1789454089723833602,
+      6936
+    ]
+  },
+  "skills": [
+    {
+      "skill_name": "agent-task-workflow",
+      "category": "agent",
+      "frontmatter_name": "agent-task-workflow",
+      "description": "Standard workflow for approaching tasks — always review a...",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "conditions": {
+        "fallback_for_toolsets": [],
+        "requires_toolsets": [],
+        "fallback_for_tools": [],
+        "requires_tools": []
+      }
+    },
+    {
+      "skill_name": "cron-management",
+      "category": "devops",
+      "frontmatter_name": "cron-management",
+      "description": "Manage, troubleshoot, and investigate Hermes cron jobs — ...",
+      "platforms": [],
+      "conditions": {
+        "fallback_for_toolsets": [],
+        "requires_toolsets": [],
+        "fallback_for_tools": [],
+        "requires_tools": []
+      }
+    },
+    {
+      "skill_name": "skill-first-workflow",
+      "category": "general",
+      "frontmatter_name": "skill-first-workflow",
+      "description": "Mandatory pre-task skill intake: scan /opt/hermes/skills,...",
+      "platforms": [],
+      "conditions": {
+        "fallback_for_toolsets": [],
+        "requires_toolsets": [],
+        "fallback_for_tools": [],
+        "requires_tools": []
+      }
+    }
+  ],
+  "category_descriptions": {}
+}
