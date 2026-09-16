@@ -10,3 +10,4 @@ httpx>=0.28.1
 python-telegram-bot>=21.0
 requests>=2.33.0
 asyncio>=4.0.0
+mcp>=2.2.0
