@@ -101,6 +101,9 @@ Ensure the main agent, onboarding script, and memory synchronization script are 
 chmod +x /opt/hermes/main.py
 chmod +x /opt/hermes/init_employee.py
 chmod +x /opt/hermes/scripts/sync_memory.sh
+chmod +x /opt/hermes/scripts/proxmox_mcp.py
+chmod +x /opt/hermes/scripts/proxmox_wrapper.py
+chmod +x /opt/hermes/scripts/pve_api.py
 ```
 
 ---
