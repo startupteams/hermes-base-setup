@@ -21,8 +21,6 @@
 !templates/**
 !deploy/
 !deploy/**
-!profiles/
-!profiles/**
 
 # 4. Explicitly block sensitive artifacts even if inside whitelisted folders
 *.env
@@ -37,6 +35,3 @@ __pycache__/
 *.py[cod]
 .DS_Store
 Thumbs.db
-
-# Temporary Block
-README.md

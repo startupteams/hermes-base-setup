@@ -86,12 +86,21 @@ apt install -y python3.11 python3.11-venv python3.11-dev python3-pip
 
 ### 3.1 Clone the Repository
 
-Clone the Hermes base setup repository into `/opt/hermes`:
+Clone the Hermes base setup repository into `/opt/hermes` and setup git credentials:\
 
+Clone repository:
 ```bash
 git clone https://github.com/startupteams/hermes-base-setup.git /opt/hermes
 cd /opt/hermes
 ```
+Configure git credentials ( change the placeholder information with your actual information ) :
+```bash
+git config user.email "<YOUR_EMAIL@xyz.com>"
+git config user.name "YOUR_GITHUB_USERNAME>"
+
+git remote set-url origin https://<YOUR_GITHUB_USERNAME>:<YOUR_PAT>@github.com/startupteams/hermes-base-setup.git
+```
+
 
 ### 3.2 Set File Permissions
 
@@ -101,6 +110,9 @@ Ensure the main agent, onboarding script, and memory synchronization script are 
 chmod +x /opt/hermes/main.py
 chmod +x /opt/hermes/init_employee.py
 chmod +x /opt/hermes/scripts/sync_memory.sh
+chmod +x /opt/hermes/scripts/proxmox_mcp.py
+chmod +x /opt/hermes/scripts/proxmox_wrapper.py
+chmod +x /opt/hermes/scripts/pve_api.py
 ```
 
 ---
