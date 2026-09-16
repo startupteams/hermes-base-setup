@@ -67,7 +67,7 @@ def init_employee(
         print(f"[*] Creating and checking out local Git branch '{branch_name}'...")
         run_git_command(["git", "checkout", "-b", branch_name], cwd=root_dir)
 
-    # 3. Build profile subdirectories (only required dirs: memories, skills, cron kept per instruction)
+    # 2. Build profile subdirectories (only required dirs: memories, skills, cron kept per instruction)
     profile_dir.mkdir(parents=True, exist_ok=True)
     memories_dir = profile_dir / "memories"
     memories_dir.mkdir(parents=True, exist_ok=True)
@@ -151,11 +151,21 @@ providers:
     mem_file.write_text(memory_md_content, encoding="utf-8")
     print(f"[+] Created: {mem_file.relative_to(root_dir)}")
 
-    # 7. Commit & push branch to GitHub
+    # 7. Whitelist in .gitignore, Commit & push branch to GitHub
     if create_branch:
+        gitignore_path = root_dir / ".gitignore"
+        whitelist_rule = f"\n!profiles/{name_clean}/\n"
+        
+        print(f"[*] Whitelisting 'profiles/{name_clean}/' in .gitignore...")
+        if gitignore_path.exists():
+            with open(gitignore_path, "a") as f:
+                f.write(whitelist_rule)
+        else:
+            gitignore_path.write_text(whitelist_rule, encoding="utf-8")
+
         print(f"[*] Staging and committing profile files to '{branch_name}'...")
-        run_git_command(["git", "add", f"profiles/{name_clean}"], cwd=root_dir)
-        run_git_command(["git", "commit", "-m", f"feat(profile): initialize agent environment for {name_clean}"], cwd=root_dir)
+        run_git_command(["git", "add", ".gitignore", f"profiles/{name_clean}"], cwd=root_dir)
+        run_git_command(["git", "commit", "-m", f"feat(profile): initialize and whitelist agent for {name_clean}"], cwd=root_dir)
 
         if push_remote:
             print(f"[*] Pushing branch '{branch_name}' to GitHub...")
