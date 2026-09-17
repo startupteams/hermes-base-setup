@@ -1,0 +1,48 @@
+{
+  "jobs": [
+    {
+      "id": "37a454b1279d",
+      "name": "hermes-stea-crmmiam02-backup",
+      "prompt": "Run the following bash command exactly:\n\n```bash\ncd ~/.hermes\ngit pull || { echo \"ERROR: git pull failed\"; exit 1; }\ngit push || true\ngit add -A\nif ! git diff --cached --quiet; then\n  git commit -m \"hermes STEA CRMMIAM02 VIRTUAL_MACHINE_UID=906 backup: $(date +'%Y-%m-%d %H-%M-%S')\"\nelse\n  git commit --allow-empty -m \"hermes STEA CRMMIAM02 VIRTUAL_MACHINE_UID=906 backup: $(date +'%Y-%m-%d %H-%M-%S')\"\nfi\ngit pull --rebase || { echo \"ERROR: git pull --rebase failed\"; exit 1; }\ngit push || echo \"WARN: git push failed (may be up to date)\"\n```\n\nIf any step fails, report the error. Do not prompt or ask for confirmation.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "hermes-stea-crmmiam02-backup.sh",
+      "no_agent": true,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 5,
+        "display": "every 5m"
+      },
+      "schedule_display": "every 5m",
+      "repeat": {
+        "times": null,
+        "completed": 13333
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-06-23T04:05:27.256752+00:00",
+      "next_run_at": "2026-08-17T14:35:12.132519+00:00",
+      "last_run_at": "2026-08-17T14:30:12.132519+00:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": {
+        "platform": "telegram",
+        "chat_id": "8669411205",
+        "chat_name": "J",
+        "thread_id": null
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null
+    }
+  ],
+  "updated_at": "2026-08-17T14:30:12.132593+00:00"
+}

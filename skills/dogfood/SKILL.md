@@ -2,7 +2,6 @@
 name: dogfood
 description: "Exploratory QA of web apps: find bugs, evidence, reports."
 version: 1.0.0
-platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [qa, testing, browser, web, dogfood]
@@ -26,6 +25,12 @@ The user provides:
 1. **Target URL** — the entry point for testing
 2. **Scope** — what areas/features to focus on (or "full site" for comprehensive testing)
 3. **Output directory** (optional) — where to save screenshots and the report (default: `./dogfood-output`)
+
+## UX/CRO audit-to-implementation mode
+
+Use `references/ux-cro-audit-to-implementation.md` when the user asks for a UX audit and also asks you to improve the website, commit the changes, or deploy them. In this mode, do not stop at a report: audit the live or local app, implement the highest-ROI usability/accessibility fixes, run a build/smoke test, commit, push, and verify deployment when tooling is available.
+
+If the production URL is protected (for example Vercel returns `HTTP/2 401` with `www-authenticate: Basic realm=...`), treat that as access protection rather than a broken app. Fall back to running the linked repository locally, state the assumption in the audit report, and verify production readiness through the deployment provider after publishing.
 
 ## Workflow
 
@@ -160,3 +165,5 @@ Save the report to `{output_dir}/report.md`.
 - **Check responsive behavior** by noting any layout issues visible in screenshots.
 - **Don't forget edge cases**: empty states, very long text, special characters, rapid clicking.
 - When reporting screenshots to the user, include `MEDIA:<screenshot_path>` so they can see the evidence inline.
+- For SaaS/founder-dashboard CRO work, prioritize clarifying the job-to-be-done, reducing competing CTAs, adding search examples, preserving filter context, showing result counts/active filters, adding explicit card CTAs, translating numeric scores into labels, and putting the next concrete action before long-form content.
+- If the task includes deployment to Vercel, `vercel deploy --prod --yes` plus `vercel inspect <deployment-url>` is a practical verification path; a Basic Auth 401 on the alias can still be a successful protected deployment.

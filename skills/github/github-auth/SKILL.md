@@ -4,7 +4,6 @@ description: "GitHub auth setup: HTTPS tokens, SSH keys, gh CLI login."
 version: 1.1.0
 author: Hermes Agent
 license: MIT
-platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [GitHub, Authentication, Git, gh-cli, SSH, Setup]
@@ -235,6 +234,23 @@ fi
 ---
 
 ## Troubleshooting
+
+### Hermes profile HOME vs real user HOME
+
+Hermes profiles may run with `HOME` set to a profile sandbox such as `~/.hermes/profiles/<profile>/home`. GitHub auth created by a user or another/admin agent may instead live in the real user home, e.g. `/home/<user>/.config/gh/hosts.yml`, `/home/<user>/.git-credentials`, or `/home/<user>/.ssh/`.
+
+When `gh auth status` says unauthenticated but the user says auth was configured, check both homes before concluding auth is missing:
+
+```bash
+printf 'profile HOME: %s\n' "$HOME"
+for p in "$HOME/.config/gh/hosts.yml" /home/$USER/.config/gh/hosts.yml /home/$USER/.git-credentials /home/$USER/.ssh; do
+  [ -e "$p" ] && echo "exists: $p" || echo "missing: $p"
+done
+GH_CONFIG_DIR=/home/$USER/.config/gh gh auth status 2>&1 || true
+HOME=/home/$USER GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/<owner>/<repo>.git HEAD
+```
+
+If the real-home auth works, run git/gh operations with `HOME=/home/$USER` or `GH_CONFIG_DIR=/home/$USER/.config/gh` rather than asking the user to re-authenticate.
 
 | Problem | Solution |
 |---------|----------|
