@@ -113,6 +113,7 @@ mp3: /bulk/pve-backups,mp=/srv/pve-backups,ro=1
   `dbus-send --system --print-reply --dest=org.ganesha.nfsd /org/ganesha/nfsd/ExportMgr org.ganesha.nfsd.exportmgr.ShowExports`
   (only `uint16 0 "/"` = exports didn't load). Mount test from client: `mount -t nfs4 10.0.20.156:/models /mnt/x`.
 - `showmount -e` (RPC v3) returns "RPC: Program not registered" against Ganesha v4 — not an error signal.
+- **2026-09-18 follow-up:** NFS-Ganesha inside the unprivileged CT worked reliably for read-only model exports (`/models`, `/models-canonical`, `/pve-backups`) but writeable `/scratch` returned `Operation not permitted` even after `Squash = no_root_squash` and `chmod 1777` on the backing dataset. Keep NFS for read-only inference clients; use rsync/SSH/Samba for write workflows (rsync daemon write to `/srv/scratch` verified).
 
 ## Evidence file locations on the node
 
