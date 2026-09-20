@@ -695,6 +695,51 @@ terminal(command="tmux new-session -d -s resumed 'hermes --resume 20260225_14305
 2. Verify provider: `pip install faster-whisper` or set API key
 3. In gateway: `/restart`. In CLI: exit and relaunch.
 
+**Two traps that survive a naive fix** (both confirmed on a live gateway):
+
+- **Stale `_HAS_FASTER_WHISPER`.** `tools/transcription_tools.py` caches
+  `_HAS_FASTER_WHISPER` at *import time*. If you `pip install faster-whisper`
+  while the gateway is already running, the live process still has the flag
+  `False`. There is a lazy re-check (`_try_lazy_install_stt()`), but it calls
+  `ensure()` **before** re-checking `find_spec()`. If `security.allow_lazy_installs:
+  false` (a common hardened profile setting), `ensure()` raises
+  `FeatureUnavailable`, the helper returns `False`, and the provider resolves to
+  `none` — still broken. **A gateway restart is required.** Do NOT weaken
+  `allow_lazy_installs` to dodge it.
+- **The gateway cannot restart itself.** `tools/terminal_tool.py` (~line 2237)
+  hard-blocks gateway lifecycle commands when `_HERMES_GATEWAY=1`, and the check
+  matches on the *command string*, so even a detached
+  `systemd-run --on-active=... systemctl --user restart hermes-gateway…` is
+  refused pre-execution. Have the user send `/restart` in chat, or run
+  `systemctl --user restart hermes-gateway-<profile>.service` from an **outside**
+  shell.
+
+**Verify end-to-end before declaring victory.** Synthesize a voice note in the
+exact Telegram format and push it through the real production handler:
+
+```bash
+VENV=~/.hermes/hermes-agent/venv
+"$VENV/bin/edge-tts" --voice en-US-GuyNeural --text "test vLLM and Proxmox" \
+  --write-media /tmp/t.mp3
+ffmpeg -y -i /tmp/t.mp3 -ac 1 -ar 48000 -c:a libopus -b:a 32k /tmp/t.ogg
+HERMES_HOME=~/.hermes/profiles/<profile> PYTHONPATH=~/.hermes/hermes-agent \
+  "$VENV/bin/python" -c "
+import tools.transcription_tools as tt
+from hermes_cli.config import load_config
+print(tt._get_provider(load_config().get('stt',{})))
+print(tt.transcribe_audio('/tmp/t.ogg'))"
+```
+
+Expect `local` and `{'success': True, 'transcript': ...}`. To reproduce the
+live gateway's broken state, set `tt._HAS_FASTER_WHISPER = False` first — it
+should then resolve to `none`.
+
+**Model choice:** `small` (461M) is the sweet spot for technical vocabulary
+(vLLM, Proxmox, LiteLLM, RDMA) on CPU — ~1–2 s for a 20 s clip at 4 vCPU int8.
+`base` is faster but mangles domain terms. Config: `stt.local.model: small`,
+`stt.local.language: en`. First run auto-downloads to
+`~/.cache/huggingface/hub/models--Systran--faster-whisper-<size>`.
+
 ### Tool not available
 1. `hermes tools` — check if toolset is enabled for your platform
 2. Some tools need env vars (check `.env`)
