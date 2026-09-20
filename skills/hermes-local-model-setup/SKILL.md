@@ -63,6 +63,49 @@ Workarounds when a model is still below floor:
 - Real fix: raise `--max-model-len` on .161 (qwen3.8, TP2/DP3) and .162 to ≥65536 via LLM Manager
   hosting presets + service restart (memory: Qwen3.8 trains at 262K; 32K was a launch choice).
 
+## CRITICAL pitfall (found 2026-09-20): tool-search gate ignores per-model context override
+
+Symptom: a small-context custom model (e.g. `qwen3.8-27b` at 70K) fails on almost *any*
+message with a **legitimate** backend error, then Hermes compresses futilely and auto-resets:
+
+```
+ContextWindowExceededError: This model's maximum context length is 70000 tokens. However,
+you requested 16384 output tokens and your prompt contains at least 53617 input tokens...
+→ context compression started → "Context cannot compress further" → Auto-resetting session
+```
+
+Cause: `model_tools._resolve_active_context_length()` (used ONLY by the tool-search gate in
+`tools/tool_search.py:should_activate`) calls `get_model_context_length(model_id)` with **no
+`base_url` / no `custom_providers`**, so `agent/model_metadata.py` step 0b is skipped and the
+profile's `custom_providers[].models[].context_length` override is **ignored**. The gate then
+resolves the model to a huge catalog/hardcoded value (qwen3.8-27b → **1,000,000**), computes
+`threshold = 1M × 10% = 100,000`, which sits *above* the heavy MCP tool set
+(**~91,481 tokens / 159 tools**), so `tool_search` **does not defer** → the full MCP tool
+surface is inlined → the real 70K window overflows. Models that resolve lower
+(qwen3.6=262,144, deepseek=128,000) defer correctly and work — so only the "high-resolving"
+model breaks.
+
+Fix (config only, no source patch, no gateway restart needed — `hermes_cli.config` invalidates
+its cache on file mtime):
+```yaml
+tools:
+  tool_search:
+    enabled: 'on'    # force unconditional deferral; MUST be the quoted string, NOT bare on/true
+```
+`enabled: true` (bool) maps to `auto`; only `'on'` forces deferral. Verify with a harness that
+registers MCP-prefixed tools and calls `assemble_tool_defs(...)` at ctx=1_000_000.
+
+Diagnostics that nail it fast:
+- `grep 'tool_search activated' agent.log` — count the deferred tools; the token figure
+  (e.g. `~91481 tokens`) is the real MCP cost.
+- Run `get_model_context_length(<model>)` in the venv and compare to the profile override.
+- Direct VM `/v1/models` `max_model_len` vs what Hermes's gate resolves for the same id.
+
+Related levers: this profile's Zapier+read_ai MCP servers cost ~91K tokens — consider disabling
+unneeded MCP servers on small-context models. `model.max_tokens` (here 16384) also eats the
+window; lower it to raise the conversation ceiling. Upstream fix = pass base_url/custom_providers
+through `_resolve_active_context_length`.
+
 ## max_tokens pitfall
 
 Custom provider profile (`plugins/model-providers/custom/__init__.py`) sends
