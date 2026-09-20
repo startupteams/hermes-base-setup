@@ -4,13 +4,13 @@
     "created_at": "2026-09-14T05:10:53.479524+00:00",
     "created_by": null,
     "last_patched_at": "2026-09-14T05:10:53.479532+00:00",
-    "last_used_at": "2026-09-18T04:46:30.873094+00:00",
-    "last_viewed_at": "2026-09-18T04:46:30.865826+00:00",
+    "last_used_at": "2026-09-19T23:53:12.613851+00:00",
+    "last_viewed_at": "2026-09-19T23:53:12.610443+00:00",
     "patch_count": 1,
     "pinned": false,
     "state": "active",
-    "use_count": 2,
-    "view_count": 2
+    "use_count": 3,
+    "view_count": 3
   },
   "airtable": {
     "archived_at": null,
@@ -480,6 +480,19 @@
     "use_count": 1,
     "view_count": 1
   },
+  "hermes-local-model-setup": {
+    "archived_at": null,
+    "created_at": "2026-09-19T23:53:12.616459+00:00",
+    "created_by": null,
+    "last_patched_at": null,
+    "last_used_at": "2026-09-19T23:53:12.622092+00:00",
+    "last_viewed_at": "2026-09-19T23:53:12.616465+00:00",
+    "patch_count": 0,
+    "pinned": false,
+    "state": "active",
+    "use_count": 1,
+    "view_count": 1
+  },
   "himalaya": {
     "archived_at": null,
     "created_at": "2026-06-22T10:50:28.503096+00:00",
@@ -940,26 +953,26 @@
     "created_at": "2026-09-09T15:02:08.292980+00:00",
     "created_by": "agent",
     "last_patched_at": "2026-09-14T01:53:20.224721+00:00",
-    "last_used_at": "2026-09-14T01:51:56.572731+00:00",
-    "last_viewed_at": "2026-09-14T01:51:56.561870+00:00",
+    "last_used_at": "2026-09-19T23:53:12.625410+00:00",
+    "last_viewed_at": "2026-09-19T23:53:12.620409+00:00",
     "patch_count": 86,
     "pinned": false,
     "state": "active",
-    "use_count": 28,
-    "view_count": 28
+    "use_count": 29,
+    "view_count": 29
   },
   "serving-llms-vllm": {
     "archived_at": null,
     "created_at": "2026-06-22T10:50:28.607224+00:00",
     "created_by": null,
     "last_patched_at": null,
-    "last_used_at": "2026-09-14T01:23:28.641719+00:00",
-    "last_viewed_at": "2026-09-14T01:23:28.626808+00:00",
+    "last_used_at": "2026-09-19T23:53:12.624059+00:00",
+    "last_viewed_at": "2026-09-19T23:53:12.618446+00:00",
     "patch_count": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 4,
-    "view_count": 4
+    "use_count": 5,
+    "view_count": 5
   },
   "simplify-code": {
     "archived_at": null,
