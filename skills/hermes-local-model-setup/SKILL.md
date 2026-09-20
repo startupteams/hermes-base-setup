@@ -31,10 +31,12 @@ custom_providers:
     base_url: https://llm-manager.marion-ia-usa.internal/v1
     key_env: MARION_LOCAL_API_KEY          # staged in profile .env, 0600
     models:
-      qwen3.6-35b-a3b: {context_length: 262144}   # pooled .162(32K)/.163(262K)/.164(262K)
-      qwen3.8-27b:     {context_length: 32768}    # .161 only (TP2/DP3, pinned 32K)
-      fast:            {context_length: 32768}    # alias → .162
-      code:            {context_length: 32768}    # alias → qwen3.8 on .161
+      qwen3.6-35b-a3b: {context_length: 262144}   # pool includes .162(70K), .163/.164(262K)
+      qwen3.8-27b:     {context_length: 70000}    # .161 TP2/DP3 qualified at 70K
+      fast:            {context_length: 70000}    # alias → .162 Qwen3.6 70K
+      code:            {context_length: 70000}    # alias → .161 Qwen3.8 70K
+      deepseek-v4.1-flash-api: {context_length: 1048576}  # provider-backed via OpenRouter/LiteLLM
+      frontier:        {context_length: 1048576}  # provider-backed DeepSeek V4.1 Flash unless local later qualifies
       startupteams/llamacpp: {context_length: 8192}  # 32768 ctx / 4 parallel slots
 
 model:
@@ -48,7 +50,13 @@ fallback_providers:
 ## Hard constraint: 64K context floor
 
 `agent/model_metadata.py: MINIMUM_CONTEXT_LENGTH = 64_000` — agent init **raises** if the
-main model's resolved context < 64K. No config/env override exists. Workarounds:
+main model's resolved context < 64K. No config/env override exists. As of 2026-09-20 the
+MARION `fast`, `code`, `qwen3.6-35b-a3b`, and `qwen3.8-27b` entries are all configured at
+>=70K in the Hermes profile metadata; `frontier`/`deepseek-v4.1-flash-api` are provider-backed.
+If a backend is raised above 64K but Hermes still aborts with a stale 32K value, update the
+profile `custom_providers[].models[].context_length` metadata in addition to the server.
+
+Workarounds when a model is still below floor:
 - Use only models whose backend reports ≥64K (today: qwen3.6-35b-a3b via .163/.164).
 - `fallback_providers` activation path does NOT re-check the floor → small models work as fallbacks.
 - Compressor auto-triggers at 85% of window for sub-floor models (safe).
