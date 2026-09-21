@@ -598,6 +598,17 @@ When the user designates the PVE API (not SSH) as the primary access path:
 - For unprivileged CTs the dumpdir must be traversable by the userns-mapped tar (`lxc-usernsexec -m u:0:100000:...`): a 700 `/root/...` dumpdir fails with `tar: ...tmp: Cannot open: Permission denied` → "job errors". Fix: `chmod 755` on the path chain (e.g. `/root`, `/root/<phase-dir>`, `<dumpdir>`). This silently produced the Sep-10 "job errors" backup failure; archive itself verified fine afterward via SHA256SUMS.
 - Copy the archive off-host (scp to another node's `/root/<name>-backups-<date>/`) and `sha256sum -c` there — a same-host copy is not recoverability evidence.
 
+## Fleet-wide safe userspace maintenance + one-at-a-time reboots
+
+For "update all nodes safely and reboot them one at a time" work, follow
+`references/fleet-userspace-maintenance.md` (proven across the 16-node MARION cluster 2026-09-21).
+Headline gotchas: the **node** status endpoint is `/nodes/<node>/status` (NOT `/status/current`, which
+501s); `pve_api.api()` returns the **full body** so read `d["data"]`; reboot polling must survive
+`TimeoutError` (treat as "unknown", never crash the loop); `qm config` (SSH) is the truth for `onboot`
+while the API reports a `1` default — always explicitly restart the guests that were running before;
+and `proxmox-firewall-data` showing up as an extra package is normal. Never reboot `miam-00100`,
+`miam-00133` or `miam-00135`.
+
 ## Terminal hardline blocks: use the PVE API for node shutdown/reboot
 
 The agent terminal hardline-blocks `shutdown`/`reboot` (even inside SSH runners like noderun). The working path is the PVE API: `POST /api2/json/nodes/<node>/status` with body `{"node": <node>, "command": "shutdown"|"reboot"}` — returns 200 immediately; poll node status until 595/no-answer (down) then until `uptime` > 30s (up). Budget several minutes for a small NUC with 8 spinning disks; polls every 40–60s are fine.
