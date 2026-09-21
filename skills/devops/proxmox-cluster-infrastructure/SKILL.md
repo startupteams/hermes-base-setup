@@ -593,6 +593,7 @@ When the user designates the PVE API (not SSH) as the primary access path:
 
 ## vzdump pitfalls (CT backup to custom dumpdir)
 
+- **PVE9 vzdump defaults to NO compression** → QEMU archives are plain `.vma` (not `.vma.zst`), LXC archives are plain `.tar` (not `.tar.zst`). If you rely on compression (e.g. to match a prod daily job, or for `qmrestore`/`pct restore` glob patterns), pass `--compress zstd` explicitly. A glob like `*.vma.zst` will match NOTHING on a no-compress backup even though vzdump reported "job finished successfully" — the backup file does exist, just without the `.zst` suffix. Verify the archive name in `/var/log/vzdump/<type>-<id>.log` before globbing.
 - `--dumpdir` directory must EXIST first; vzdump does not create it.
 - For unprivileged CTs the dumpdir must be traversable by the userns-mapped tar (`lxc-usernsexec -m u:0:100000:...`): a 700 `/root/...` dumpdir fails with `tar: ...tmp: Cannot open: Permission denied` → "job errors". Fix: `chmod 755` on the path chain (e.g. `/root`, `/root/<phase-dir>`, `<dumpdir>`). This silently produced the Sep-10 "job errors" backup failure; archive itself verified fine afterward via SHA256SUMS.
 - Copy the archive off-host (scp to another node's `/root/<name>-backups-<date>/`) and `sha256sum -c` there — a same-host copy is not recoverability evidence.
