@@ -1,0 +1,31 @@
+[Unit]
+Description=vLLM OpenAI-compatible server (Qwen3.6-35B-A3B-AWQ, TP1/DP6/EP6)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+# Flags below are the battle-tested line recovered from the target guest's root
+# bash_history — do NOT invent flags; re-mine history per deployment and adjust.
+Environment=HF_HOME=/opt/vllm-cache
+Environment=VLLM_USE_FLASHINFER_SAMPLER=0
+Environment=VLLM_USE_DEEP_GEMM=0
+ExecStart=/opt/vllm-venv/bin/vllm serve QuantTrio/Qwen3.6-35B-A3B-AWQ \
+  --served-model-name qwen3.6-35b-a3b \
+  --quantization awq --dtype half \
+  --tensor-parallel-size 1 --data-parallel-size 6 \
+  --enable-expert-parallel --expert-placement-strategy linear \
+  --max-model-len auto \
+  --gpu-memory-utilization 0.92 \
+  --kv-cache-dtype turboquant_k8v4 --attention-backend TURBOQUANT \
+  --enable-prefix-caching --enable-chunked-prefill \
+  --scheduler-reserve-full-isl --watermark 0.05 --kv-cache-metrics \
+  --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=15
+# model load across 6 GPUs takes minutes — give the start generous time
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
