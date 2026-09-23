@@ -666,12 +666,24 @@ DETACHED executor on a node that is NOT a target:
    command string): `PRE_DELAY=180 setsid nohup bash <script> </dev/null >/dev/null 2>&1 &`
 3. **Verify detachment**: `ps -o pid,ppid,sid -p <pid>` → `PPID=1` AND `SID==PID` (session
    leader) = survives ssh exit and agent death. Do not skip this.
-4. Reboot via `pvesh set /nodes/<n>/status --command reboot` — run ON a cluster node, `pvesh`
-   authenticates as local `root@pam`, so **no credentials need staging anywhere**. Fallback:
-   `ssh -o BatchMode=yes root@<n> systemctl reboot` (cluster key trust).
-5. Wait for return by polling `/nodes/<n>/status` until `uptime < 900`; then verify/start the
-   expected guests (`pvesh set /nodes/<n>/<type>/<vmid>/status/start`). Log to a timestamped
-   file + `.status` rollup on the survivor node.
+4. **Reboot via `pvesh create` — NOT `pvesh set`.** PVE maps POST→`create` and PUT→`set`, and the
+   node status endpoint is a POST. `pvesh set /nodes/<n>/status --command reboot` fails with
+   `No 'set' handler defined for '/nodes/<n>/status'` and reboots **nothing** — it cost a full
+   run on 2026-09-23 (the executor reported `rc=1` while the nodes never went down). Correct
+   form: **`pvesh create /nodes/<n>/status --command reboot`**. Run ON a cluster node — `pvesh`
+   authenticates as local `root@pam`, so **no credentials need staging anywhere**. The fallback
+   `ssh -o BatchMode=yes root@<n> systemctl reboot` only works with the node's **IP**
+   (`root@10.0.20.135`) — bare short-names do NOT resolve from a node shell
+   (`Could not resolve hostname miam-00100`).
+5. Wait for return by polling `/nodes/<n>/status` until `uptime < 900`, then **sleep 60–90 s
+   before touching guests** — checking at `uptime≈7s` yields false "NOT running" verdicts and
+   `proxy handler failed: cluster not ready - no quorum?` on the start call, because guests and
+   cluster services are still converging. Start the expected guests with
+   `pvesh create /nodes/<n>/<type>/<vmid>/status/start` (again `create`, not `set`), retry once
+   after ~60 s, and treat a guest with `onboot=1` as self-recovering — an explicit start that
+   "FAILED" during the quorum window often succeeded on its own moments later (CT906 and VM112
+   both autostarted after the script reported them down). Log to a timestamped file + `.status`
+   rollup on the survivor node.
 6. **PRE-FLIGHT the agent's own return path before rebooting its host.** The gateway is a
    USER-level unit: it only comes back if `systemctl --user is-enabled` = enabled,
    `WantedBy=default.target`, `Restart=always` **and `loginctl show-user <user> -p Linger` =
