@@ -718,6 +718,18 @@ Userspace NFS avoids privileged-LXC/kernel-NFS compromises. Traps hit 2026-09-11
 - `mount -t nfs4 server:/<pseudo>` is the client form (pseudo-path, not the backing path).
 - Bind-mount datasets into the CT with `pct set <ct> -mp<N> /host/path,mp=/srv/...,ro=1` — **mp changes only apply after a container restart**, and mountpoint dirs appear owned by `nobody:nogroup` inside (normal for unprivileged mapping).
 
+## LLM Manager (VM114) benchmark/routing access pattern (2026-09-23)
+
+- LiteLLM binds **127.0.0.1:4000** on VM114 (nginx fronts 443 externally) — remote benchmark clients CANNOT hit :4000 directly (connection refused looks like an outage but isn't). Route Manager-level probes via guest-exec on VM114 itself.
+- Master key lives at `/etc/llm-manager/secrets/litellm_master_key`; `litellm.env` only carries OPENROUTER_API_KEY. Use it server-side (`curl -H "Authorization: Bearer $K"` inside the guest script) — never echo it into exec output.
+- `/healthz` IS reachable externally via `https://10.0.20.108/healthz` (returns version, e.g. `0.11.0-default-baseline`); `/v1/models` is 401 without the key.
+- **Streaming quirk of the fleet's custom vLLM forks (`vllm-0.28.0-*`):** streamed chunks carry `delta.reasoning` (NOT the standard `delta.reasoning_content`) for reasoning models. Any TTFT/tok-s benchmark that only checks `content`/`reasoning_content` silently records null throughput on qwen3.6/qwen3.8 endpoints. Reusable benchmark runner: `scripts/stream_bench.py` (handles reasoning/content deltas, returns TTFT + tok/s + latency).
+- Old-model benchmark hygiene (Jordan's directive 2026-09-23): if a model family may be deprecated/broken, cap old-model work at ~1 hour and prioritize the new/target model — baselines can be captured retroactively. Pause at natural checkpoints (e.g. after benchmarks) when the owner signals incoming steering.
+
+### PITFALL: raw urllib calls to node APIs need the /api2/json prefix
+
+Calling `https://<node>:8006/nodes/<node>/qemu` directly (or through any client that doesn't prepend it) returns `HTTP 500: no such file '/nodes/<node>/qemu'` — this looks like a broken cluster/permission issue but is purely a missing `/api2/json` prefix. The skill's `pve_api.py` wrapper handles it; hand-rolled urllib clients must prepend `/api2/json` to every path. Symptom signature: the SAME path worked minutes earlier in a different client → suspect prefix difference first, not cluster state.
+
 ## Node identity & evidence hygiene
 
 - `hostname -s` guard at the top of every remote script (`[[ "$(hostname -s)" == <node> ]] || exit 1`).
