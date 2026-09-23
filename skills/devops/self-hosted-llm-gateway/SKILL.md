@@ -186,7 +186,7 @@ vLLM fleet (per-node VMs, one port 8000 each; TP/DP/EP per GPU set)
   Fix shipped: host-level `hosts.desired_service_state` (default SERVING) — when MAINTENANCE the
   engine skips service recovery and logs `maintenance_skip` (verified 6× under live 25K load;
   backup `.bak.maint`). OPERATING RULE: set MAINTENANCE before benchmark sweeps or deliberate
-  model migrations, restore SERVING after. Note: GPU hosts often have NO `deployments` rows, so
+  model migrations, restore SERVING after. **2026-09-23 live clarification:** MAINTENANCE suppresses only unhealthy-service recovery on an already running VM; it does NOT suppress stopped-VM auto-start or remove LiteLLM routes. For a cold-cycle drain use the authenticated `/api/hosts/{ip}/desired-state` POST with `desired_power_state=STOPPED_INTENTIONAL` (suppresses recovery and synchronizes registry), then regenerate using `/opt/llm-manager/app/litellm_sync.py` AND explicitly restart LiteLLM. The live generator's docstring claims restart/timer behavior, but its implementation only writes YAML and no sync timer was present. Restore RUNNING, wait for fresh healthy/routable registry, regenerate and restart again. Live config deliberately has no automatic cloud fallback: explicit provider requests work, but `code` clients need explicit alternative selection. Note: GPU hosts often have NO `deployments` rows, so
   the column belongs on `hosts` itself (engine query joins hosts LEFT JOIN deployments and
   COALESCEs) — a deployment-level-only flag silently never fires on GPU hosts.
 - **New model in the registry does not route until LiteLLM config regenerates (v0.11):**
