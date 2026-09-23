@@ -88,6 +88,14 @@ Master: 10.0.20.161:29500 (VM103). Launch master first, confirm `ss -tln | grep 
 
 Ephemeral state that does NOT survive host reboot: sriov_numvfs, MTU 9000, link up, temp IPs, guest /30s, static routes. To pause RDMA: stop the inference VMs (VM stopped = VF unassigned = no RDMA). To fully retract: `echo 0 > .../sriov_numvfs` per PF, optionally `devlink ... enable_sriov value false cmode permanent` + reboot.
 
+## Read-only persistence preflight (verified 2026-09-23)
+
+- Do not match guest VFs by their current MAC without verifying permanence: all four ring VFs showed `ethtool -P` = `Permanent address: not set` and sysfs `addr_assign_type=3`. Use the PCI-path-derived interface name + mlx5_core driver with a hostpci/guest-PCI identity guard, or separately provision persistent host VF MACs. PF permanent MAC matching remains suitable.
+- A guest port administratively DOWN may make `/sys/class/net/<iface>/carrier` fail with EINVAL; ethtool Unknown/no and RDMA DOWN/DISABLED do NOT establish a missing cable. When scope forbids bringing ports up, explicitly leave physical qualification pending.
+- `ethtool -m` on VFs may exit 0 but return all-zero EEPROM bytes. Query host-owned parent PFs for DAC identities. The passed-through PFs can still expose their cable serial while down.
+- Current VM103/109/111 management interfaces were all `enp10s18`, with MAC-matched `/etc/netplan/50-cloud-init.yaml`, networkd enabled, and cloud-init networking disabled. Always rediscover; historical enp8s18/enp9s18 names and VM109 mlx5_N names were stale.
+- Netplan in guests cannot recreate host VFs or raise their host-owned parent PFs after cold boot. Check host VF provisioning persistence separately before claiming end-to-end reboot persistence.
+
 ## Rollback notes
 
 - Pre-change VM configs: `/root/<node>-vm<id>-config-before-sriov-<ts>.txt` on each node.
