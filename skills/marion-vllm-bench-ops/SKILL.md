@@ -1,6 +1,6 @@
 ---
 name: marion-vllm-bench-ops
-description: MARION-IA-USA vLLM benchmarking/hosting ops lessons — MAINTENANCE gate vs recovery engine, vllm bench serve gotchas, Qwen3.8-27B topology on 6-GPU hosts, per-kernel NVIDIA driver risk
+description: MARION-IA-USA vLLM/llama.cpp hosting & benchmarking ops — pre-flight model feasibility gate, provider-vs-local detection, node-identity fingerprint routing map, MAINTENANCE gate vs recovery engine, duplicate-unit crash loops, Qwen3.8-27B topology on 6-GPU hosts, per-kernel NVIDIA driver risk
 ---
 
 # MARION vLLM benchmark & hosting ops (learned 2026-09-13, v0.11 Phase 19/20)
@@ -40,3 +40,58 @@ VM401 boots kernel 6.8.0-139 but NVIDIA modules existed only for 138 (no DKMS). 
 
 ## Provisioning presets (hosting_command_presets on CT115 llmmanager DB)
 Columns: scope_type/scope_key/engine/friendly_name/content/**content_hash (NOT NULL, sha256 of content)**/created_by. Existing: `ROLLBACK-qwen3.6-35b-a3b-DP6EP6` + `CANDIDATE-qwen3.8-27b-AWQ-DP6` + `CANDIDATE-qwen3.8-27b-AWQ-TP4` (10.0.20.161), `FAST-WORKER-PRODUCTION` (10.0.20.162). Rollback = load preset + explicit confirmed restart (save ≠ restart, §F3).
+
+## ⛔ NEVER upgrade vLLM on VM109 / VM111 — custom fork
+Both hosts serve Qwen3.6-35B-A3B at **262144** context using **non-upstream** flags:
+`--kv-cache-dtype turboquant_k8v4 --attention-backend TURBOQUANT` (+ `--scheduler-reserve-full-isl
+--watermark 0.05 --kv-cache-metrics`). Live fingerprint `vllm-0.28.0-dp6-ep-2bfd2e21`
+(VM109 and VM111 share it — identical build). Treat `/opt/vllm-venv` on those hosts as **immutable**:
+any "upgrade vLLM" step destroys 262 K capability. Also note their `--max-model-len auto` resolves to
+262144 — do not assume 70 K on these hosts, and check the *live* fingerprint rather than a plan's claim.
+
+## Pre-flight model feasibility gate
+Before any download / alias retag / "extend the existing deployment": measure the artifact from the HF
+API, compare against the **real** envelope (measured guest RAM − live services, VRAM × gpu_mem_util,
+minus KV + CUDA graphs + page cache), and check precision-vs-SM support. FP8 needs SM89+ → **the
+official DeepSeek-V4.1-Flash artifact can never run on a 3080, at any size**. Reject with arithmetic
+*before* spending hours on a download. Full recipe, thresholds and measured 2026-09-23 numbers:
+`references/model-placement-feasibility.md`.
+
+## Provider-vs-local detection — verify "it already works" before extending it
+A plan saying *"extend the currently working X deployment"* must prove X is local. Signals: name ending
+`-api`, response `id` shaped `gen-…`, `provider: Together|DeepInfra|Alibaba` (cloud); `system_fingerprint`
+`vllm-*` (local vLLM) or `b1-*` (local llama.cpp). A single alias returning *different* `provider` values
+across calls is a provider **router**, not one backend. In MARION, `frontier` and
+`deepseek-v4.1-flash-api` are **cloud-only** — there is no local DeepSeek deployment.
+
+## Alias→node routing map via system_fingerprint
+vLLM's `system_fingerprint` identifies the *node instance*, so it maps public aliases to hardware:
+`fast`→VM401 (`vllm-0.28.0-dp6-ep-5a52ab37`); `qwen3.6-35b-a3b`→VM109 **and** VM111 pool
+(`…-dp6-ep-2bfd2e21`, shared); `code` + `qwen3.8-27b`→VM103 (`…-tp2-dp3-263e7d50`);
+`startupteams/llamacpp`→VM149 (`b1-311d421`).
+**Pitfall:** probing a node directly on `:8000/v1/chat/completions` with an invented model name returns
+**HTTP 404** — pass that server's real `--served-model-name`.
+Run it all with `scripts/fleet_probe.py` (`--direct` for per-node fingerprints, `--nodes` for ExecStart +
+GPU inventory via PVE guest-exec).
+
+## Duplicate systemd units → crash loop (recurring across VMs; check EVERY host)
+Symptom: one unit holds `:8000` while a second unit sits in `activating`, retrying
+`OSError: [Errno 98] Address already in use` every few seconds. Diagnose with
+`systemctl is-enabled` + `is-active` + `systemctl show -p NRestarts --value <unit>` + journal.
+Fix = `systemctl stop <the redundant unit>` — serving is unaffected because the other unit owns the port.
+**Do not assume a prior "resolved on VM109" note covers the other hosts** — this was found live on
+**VM111** on 2026-09-23 (`vllm-qwen.service` active vs `vllm.service` looping) long after the VM109
+note. Unit naming is not yet normalised (`vllm-qwen.service` on VM111 vs `vllm.service` elsewhere).
+
+## Hardware envelope + access paths
+- VM103/109/111 = 6× RTX 3080 20 GB; **VM401 = 6× RTX 5060 Ti 16 GB (SM120)** — the fleet is **not**
+  homogeneous, so never apply one host's fit/kernel math to another.
+- VM149 = 16 cores, **62 GiB usable, no GPU** (llama.cpp only; Qwen3-4B at 32 K / 4 slots).
+- All five GPU/CPU VMs have 64 GiB guest RAM (62 usable) and `balloon=0`; VM114 = 8 vCPU / 16 GiB.
+- **MIAM-00112 (VM401) has a failing DIMM (channel#7) — hardware service required.** Do not make it the
+  sole safety anchor for a migration.
+- Access: `pve.py` guest-exec from `~/.llm-manager-v011` reaches every guest (PVE API ticket + `pve_root.txt`).
+  Prefer it over direct SSH, which is not keyed on the GPU VMs. VM114 accepts `ubuntu@` with passwordless `sudo`.
+- LLM Manager is **v0.11.0** (`/healthz` → `version`); app = `/opt/llm-manager/app/main.py` (FastAPI,
+  session-cookie auth), DB on CT115. Only `hosting_command_presets` exists — there are **no**
+  history/benchmark tables or endpoints, so a "benchmark history" feature is greenfield, not an extension.

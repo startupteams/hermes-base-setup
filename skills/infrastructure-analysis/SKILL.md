@@ -31,6 +31,34 @@ Write structured technical analysis documents for hardware, networking, and infr
 
 If no contradictions exist, skip this section and proceed to the core analysis.
 
+### Then verify the load-bearing claims against the LIVE system (not just the docs)
+
+Documents — including plans the user hands you — describe *intent*. Before producing an analysis or
+executing a plan, confirm the few facts the whole thing rests on by probing the running system:
+
+1. List the actors' real current state (`/v1/models`, `systemctl show -p ExecStart`, VM configs).
+2. Confirm every "existing / already working" asset **actually exists and is what it is claimed to be**.
+   A name is not evidence: a model registered as `<x>-api` is provider-backed, not local; a response
+   carrying a `provider:` field or a `gen-…` id is cloud. Verify with the artefacts, not the label.
+3. Re-measure the hardware envelope (`free -g` inside the guest, `nvidia-smi`, Proxmox `memory`/`balloon`)
+   rather than trusting a table in the plan.
+4. Record discrepancies in a table, then **stop and report** if a discrepancy makes the plan's premise
+   false — do not "fix" the plan silently by substituting a different model, host, or engine.
+
+### Executing a plan: honor its own stop conditions
+
+When the deliverable is *execution* of a written plan, the plan's stop conditions are binding, and a
+blocked-with-evidence outcome is a **success**, not a failure. Checklist:
+
+- Do the non-destructive, gated work first (baseline capture, rollback artefacts) — it is
+  unconditional and never wasted.
+- Do the feasibility/fit gateway **before** any download, service stop, or config change.
+- Map every blocker to the plan's own numbered stop condition, so the report speaks its language.
+- Never relabel, substitute, or partially deploy to manufacture a "done".
+- Preserve rollback state by *not changing* what you did not have to change; state that explicitly in
+  the report ("no production change; nothing to roll back").
+- Still do the parts that are unblocked and independent — and say which they are.
+
 ## Output Format (Required)
 
 Every infrastructure analysis MUST follow this structure:
@@ -120,3 +148,7 @@ See `references/` for:
 - Hardware purchasing records from analysis sessions
 - GPU spec sheets and benchmark data
 - Proxmox VM passthrough configurations
+
+Related: `marion-vllm-bench-ops` carries the fleet-specific counterpart — measured hardware envelope,
+pre-flight model feasibility gate, provider-vs-local detection, and a read-only
+`scripts/fleet_probe.py` that produces the live baseline a plan review depends on.
