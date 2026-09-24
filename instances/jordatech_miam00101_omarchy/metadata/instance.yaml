@@ -1,0 +1,9 @@
+instance_id: jordatech_miam00101_omarchy
+hostname: MIAM-00101 (HP Omen, Omarchy)
+role: desktop
+hermes_home: /home/jordatech/.hermes
+portable_sync: true
+runtime_database_sync: false
+credentials_sync: false
+imported_from: jordatech_vm906
+imported_at: "2026-09-25T00:31:36+05:45"
