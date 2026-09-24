@@ -21,6 +21,8 @@
 !templates/**
 !deploy/
 !deploy/**
+!instances/
+!instances/**
 
 # 4. Explicitly block sensitive artifacts even if inside whitelisted folders
 *.env
@@ -35,3 +37,18 @@ __pycache__/
 *.py[cod]
 .DS_Store
 Thumbs.db
+instances/**/.env
+instances/**/.env.*
+instances/**/auth.json
+instances/**/google_client_secret.json
+instances/**/google_token.json
+instances/**/config.yaml
+instances/**/gateway_state.json
+instances/**/channel_directory.json
+instances/**/install_id
+instances/**/*.pem
+instances/**/*.key
+instances/**/*.db
+instances/**/*.sqlite*
+instances/**/*.lock
+instances/**/.usage.json

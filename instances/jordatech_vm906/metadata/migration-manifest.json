@@ -1,0 +1,49 @@
+{
+  "export_id": "vm906_portable_export_20260924",
+  "source": {
+    "host": "hermes-jordan (VM906)",
+    "hermes_home": "/home/jordatech/.hermes",
+    "profile": "agent_stea004_entrepreneur",
+    "state_db_bytes": 244703232,
+    "sessions": 186,
+    "messages": 20867
+  },
+  "destination": {
+    "host": "MIAM-00101 HP Omen / Omarchy",
+    "hermes_home": "/home/jordatech/.hermes",
+    "branch": "jordatech_miam00101_omarchy"
+  },
+  "repo": {
+    "url": "https://github.com/startupteams/hermes-base-setup",
+    "vm906_branch": "jordatech_vm906"
+  },
+  "contents": {
+    "brain": ["SOUL-global-vm906.md", "SOUL-profile-vm906.md"],
+    "skills_global": {"size": "16M", "categories": 28},
+    "skills_profile": {"size": "26M", "categories": 34},
+    "knowledge": {
+      "memories_profile": ["MEMORY.md", "USER.md"],
+      "memories": "empty (documented)",
+      "shared": "empty (documented)"
+    },
+    "conversation_exports": {
+      "sessions_md": 186,
+      "messages_jsonl": 20867,
+      "memory_records": 4,
+      "index": "INDEX.md"
+    },
+    "metadata": [
+      "vm906-profile-state.db (245 MB, quick_check ok, online-backup API)",
+      "vm906-memory-store.db (quick_check ok)",
+      "vm906-verification-evidence.db (quick_check ok)"
+    ]
+  },
+  "exclusions": "plan §11 denylist (env/auth/config/install/locks/caches/db-wal-shm)",
+  "hermes_native_tooling": {
+    "sessions_export": "JSONL archive — SAFE (used conceptually)",
+    "import_cmd": "REPLACEMENT-restore semantics — REJECTED for Omen",
+    "profile_export": "tar.gz archive of a full profile — not used (would capture config/env)"
+  },
+  "secret_scan": "clean (all hits reviewed, none real)",
+  "generated": "2026-09-24T18:05Z"
+}

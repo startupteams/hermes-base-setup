@@ -1,0 +1,7 @@
+GitHub boundary: entrepreneur/project work uses jordatech repos only; startupteams repos require explicit per-task authorization.
+§
+Primary work email is jordan@startupteams.co (Google Workspace). Personal email is jordatech@gmail.com. Google account uses passkeys, not passwords.
+§
+Jordan Ulmer, CEO/Founder StartupTeams.co; hands-on homelab operator running the MARION-IA-USA Proxmox cluster (Marion, Iowa) — most sessions are LLM-infra operations, not just business strategy. Usually Himalayas-based, periodically in USA. Passionate about Jesus & technology, loves teaching; jordanulmer.com. Supplies credentials on demand — stage into root-owned 0600 files on the target host, never echo or store in memory. Wants focused questions before major infra moves, then continuous autonomous execution (roadblock → pivot, never stop). Requests features by analogy to products he knows (e.g. 'token usage like OpenRouter shows'); the /admin web UI is the control plane he expects everything wired into.
+§
+Infra rules: power via Emporia, never poll PDUs .151-.153 (control only). Static IPs outside pool .190-.250, low numbers, verify OPNsense. OpenRouter 'vm906_llm_manager_fallback' = manager key; default GLM 5.3 Flash. Handoff docs: chat + local file w/ path. Server_Architecture xlsx = authoritative device/IP/MAC source. OK w/ HW changes (SB off, DAC swap) for perf.

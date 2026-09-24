@@ -1,0 +1,19 @@
+instance_id: jordatech_vm906
+hostname: hermes-jordan
+role: entrepreneur
+source_profile: agent_stea004_entrepreneur
+hermes_home: /home/jordatech/.hermes/profiles/agent_stea004_entrepreneur
+portable_sync: true
+runtime_database_sync: false
+credentials_sync: false
+exported: "2026-09-24"
+repo_branch: jordatech_vm906
+notes: >
+  Full portable-brain export from VM906 profile agent_stea004_entrepreneur:
+  SOUL variants, global+profile skills, MEMORY.md/USER.md durable memories,
+  and the complete conversation-history archive (186 sessions / 20867
+  messages) as searchable Markdown + JSONL. SQLite DB snapshots stay OUT of
+  git (workspace-only artifacts in /home/jordatech/hermes-portable-export/).
+  Secrets scrubbed at source (vck_/vcp_ Vercel tokens, Google OAuth client
+  IDs/secrets, generic token values) after GitHub Push Protection flagged
+  the first push; all locations re-scrubbed and re-verified clean.
