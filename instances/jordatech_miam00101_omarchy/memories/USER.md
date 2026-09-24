@@ -1,0 +1,1 @@
+Jordan prefers autonomous execution: 'make an assumption and continue' — questions allowed but must be non-blocking. When a channel keeps failing he halts the run and asks for a written hand-off document instead.
