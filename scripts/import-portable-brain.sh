@@ -89,8 +89,9 @@ if git show-ref --verify --quiet refs/remotes/origin/jordatech_miam00101_omarchy
   git switch -C jordatech_miam00101_omarchy origin/jordatech_miam00101_omarchy
 else
   # Branch from the jordatech_vm906 branch (not main) so the .gitignore with the
-  # instances/ whitelist is in effect for the git add below.
-  git fetch origin jordatech_vm906
+  # instances/ whitelist is in effect for the git add below. Full fetch first so
+  # the remote-tracking ref is current (git fetch <url> <branch> only sets FETCH_HEAD).
+  git fetch origin '+refs/heads/jordatech_vm906:refs/remotes/origin/jordatech_vm906'
   git switch -c jordatech_miam00101_omarchy origin/jordatech_vm906
 fi
 mkdir -p instances/jordatech_miam00101_omarchy/{brain,memories,skills,metadata}
