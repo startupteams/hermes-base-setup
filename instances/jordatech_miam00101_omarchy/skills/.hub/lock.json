@@ -123,6 +123,28 @@
       },
       "installed_at": "2026-06-22T08:35:39.536879+00:00",
       "updated_at": "2026-06-22T08:35:39.536879+00:00"
+    },
+    "llama-cpp": {
+      "source": "official",
+      "identifier": "official/mlops/inference/llama-cpp",
+      "trust_level": "builtin",
+      "scan_verdict": "backfilled",
+      "content_hash": "sha256:43a4ec8fb07acce8",
+      "install_path": "mlops/inference/llama-cpp",
+      "files": [
+        "SKILL.md",
+        "references/advanced-usage.md",
+        "references/hub-discovery.md",
+        "references/optimization.md",
+        "references/quantization.md",
+        "references/server.md",
+        "references/troubleshooting.md"
+      ],
+      "metadata": {
+        "backfilled_from": "optional-skills"
+      },
+      "installed_at": "2026-09-24T19:46:30.511288+00:00",
+      "updated_at": "2026-09-24T19:46:30.511288+00:00"
     }
   }
 }
