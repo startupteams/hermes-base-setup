@@ -16,4 +16,8 @@ Jordan: grants broad server autonomy (break OK — document, fix, don't stop); l
 §
 MARION infra: LLM Mgr VM114@.108 (v0.11.0); PG CT115@.116; LLDAP@.101. Workspace ~/.llm-manager-v011 (pve.py, creds 0600). PVE: guest-exec arg[]+poll; GET=querystring; LXC exec 501; VM114 qga can wedge.
 §
-Brain migration 09-24/25: COMPLETE both sides. VM906 brain = startupteams/hermes-base-setup@jordatech_vm906; Omen synced on branch jordatech_miam00101_omarchy (Jordan directive: Omen uses this branch). Hourly no-agent exporters: VM906 cron 0c9b84306a9f, Omen cron 150481b491a9 (both portable_brain_sync.sh). Omen access: miam-00133 → pct exec 100 -- tailscale ssh jordatech@100.69.169.125 (one-time browser approval per session; plain :22 over tailnet intercepted by TUN RunSSH). hermes import = replacement-restore, never merge. Push Protection caught real vck_/vcp_/GOCSPX secrets in old session exports — rebuild branch from main if push rejected. Import fixes: branch Omen from jordatech_vm906 not main; refspec fetch. FlashNext BLOCKED: vllm 0.30 caps Qwen4Exp TP<=4.
+FlashNext BLOCKED: vllm 0.30 caps Qwen4Exp TP<=4.
+§
+FlashNext V3 SUCCESS (09-24): todiadiyatmo recipe (nightly eed1f3d0 + 11-file overlay incl #54709 PP gate) + W4A16-Attn8-FP8PLE artifact rev aeae1483. TP2xPP3/DP1/EP on all 6x3080 works. C1 37.9/C4 23.9/C6 23.4 tok/s/agent; KV 665K @70K. Stack on VM102 /opt/hf-fork (400G disk, docker image local/qwen38-flash-next:eed1f3d0-ampere-pp-mtp, run_stage.sh with MAXLEN/SEQS). MTP+FP8KV not yet enabled. Handoff: ~/flashnext-v3-20260924/.
+§
+LLM Manager recovery DUAL trigger: desired_service_state=MAINTENANCE gates only HTTP-probe restarts; desired_power_state=RUNNING + observed VM stop fires outage_detected→vm_start regardless. GPU handoffs need BOTH power=STOPPED + service=MAINTENANCE, restore both after.

@@ -18,6 +18,18 @@ UPDATE hosts SET desired_service_state='SERVING' WHERE guest_ip='<ip>';
 ```
 Engine behavior (v011_recovery.py on VM114 `/opt/llm-manager/app/`): `MAINTENANCE` → logs `maintenance_skip`, never restarts; `SERVING` → bounded recovery (2 VM starts / 2 service restarts, cooldown, then FAILED). Backups: `v011_recovery.py.bak.maint`.
 
+**⛔ DUAL-TRIGGER CORRECTION (2026-09-24, proven on a GPU handoff):** the MAINTENANCE gate only
+covers the **HTTP-probe** restart path. A **stopped VM** with `desired_power_state='RUNNING'`
+still fires `outage_detected → recovery_vm_start` and the engine **restarted VM103 ~54 s after
+qm stop, re-claiming the GPUs mid-handoff** (recovery_events 2267-2269). For any operation that
+requires a GPU-owning VM to STAY down, set BOTH columns, then restore both:
+```sql
+UPDATE hosts SET desired_power_state='STOPPED', desired_service_state='MAINTENANCE' WHERE guest_ip='<ip>';
+-- ... work ...
+UPDATE hosts SET desired_power_state='RUNNING', desired_service_state='SERVING' WHERE guest_ip='<ip>';
+```
+(Creds: `/etc/llm-manager/secrets/pg_app_creds` on VM114, key=value format `PG_HOST/PG_DB/PG_USER/PG_PW`; source it, export PGPASSWORD, psql to CT115.)
+
 **Always run bench legs serially.** Two concurrent bench jobs on one host will saturate it and trigger the false-positive path even with SERVING semantics.
 
 ## vllm bench serve gotchas (vLLM 0.28)
@@ -131,7 +143,13 @@ Qwen3.8-Flash-Next attempt — full chain in `references/qwen4exp-flashnext-ampe
 anywhere = 70 GB") was wrong by 10×: unsloth UD quants of Qwen3.8-27B go to 6.2 GB (IQ1_S), UD-Q4_K_M
 = 16.5 GB. Always enumerate `api/models/<repo>?blobs=true` per candidate repo before declaring a fit
 gate failed. Also: a 27B DENSE model on a 16-core CPU box measured **0.8 tok/s** — smaller quant ≠
-viable CPU serving; check the arch (dense vs MoE) before proposing CPU lanes.
+viable CPU serving; check the arch (dense vs MoE) before proposing CPU lanes. Same class of error,
+2026-09-24: a plan's artifact recommendation (`todiadiyatmo/Qwen3.8-Flash-Next-W4A16-Attn8-FP8PLE`,
+~124 GB) was verified TRUE by HF API before download — always do the blobs=true pass first;
+the EXPERT TENSOR FORMAT (per-expert GPTQ-packed vs AWQ-gemm unfused) determines the vLLM loader
+path (`inc`+MARLIN vs custom patches) and is visible in `model.safetensors.index.json` +
+safetensors headers BEFORE downloading (data_offsets aggregates give per-class byte totals:
+PLE table / experts / main layers / vision / mtp).
 
 **vLLM major-version side-by-side pattern:** never upgrade the production venv (custom forks!).
 Build `/opt/vllm-venv-<ver>/`, verify with `pip show` + `import torch; torch.cuda.get_device_capability()`
@@ -139,6 +157,43 @@ Build `/opt/vllm-venv-<ver>/`, verify with `pip show` + `import torch; torch.cud
 → falls back to F.linear). Stage artifacts on a separately-attached disk (hot-plug scsi + mkfs + fstab
 `nofail` works live) sized for the FULL artifact, and raise guest RAM BEFORE the load attempt
 (PVE `PUT config {memory: N}` then stop/start — hotplug of memory isn't reliable on existing VMs).
+
+## Community-fork serving (when stock vLLM has hard arch bans) — proven 2026-09-24, Flash-Next V3
+
+When a stock release structurally blocks a model (e.g. Qwen4Exp PP/TP caps), do NOT hand-patch stock
+again — find a community recipe that already solved it, then port it. Verification order that worked:
+
+1. **Verify repos + artifacts from the CLI/API before believing the plan** (`api.github.com/repos/<o>/<r>`,
+   `raw.githubusercontent.com`, `hf.co/api/models/<id>?blobs=true`). Plans name repos that may not exist
+   or may be locally-built images not on any registry.
+2. **Prefer a recipe whose pinned base is a PUBLIC image** (pullable `vllm/vllm-openai:nightly-<sha>`
+   with digest pin) + a source overlay, over a fork author's private Docker image (ahnguyen17's
+   `pp3fix26` is local-build-only; its patches live in docs as prose — reference value only).
+3. **Verify the overlay actually landed in the built image** by grepping a distinctive string from
+   inside the image (`--entrypoint grep <img> -n "requires every PLE layer" …/config.py`), not just
+   by trusting the Dockerfile.
+4. **Checkpoint choice is the loader-path choice.** An AutoRound/INC checkpoint with GPTQ-packed
+   per-expert weights routes to the `inc` quant + MARLIN WNA16 MoE backend and *just loads*; the
+   same model as AWQ-gemm unfused experts required custom loader patches that never fully worked.
+   Inspect `model.safetensors.index.json` + safetensors headers BEFORE downloading (size math AND
+   expert tensor naming: `gate_proj/up_proj/down_proj` + qweight/qzeros/scales per expert = GPTQ-packed).
+5. **Read the recipe's compose/README for exact env knobs** — they encode hard-won settings
+   (`NCCL_P2P_DISABLE`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`, expandable_segments,
+   `--mamba-cache-mode align`, IPC/shm/SYS_PTRACE/seccomp for PLE offload, power caps).
+6. **Serve launch quirk:** `vllm serve <local-dir>` via the console entrypoint can fail
+   `Invalid repository ID or local directory` (seen 4×, nightly eed1f3d0) while the identical
+   EngineArgs path succeeds. Workaround: launch via
+   `python3 -c "import sys; sys.argv=['vllm','serve',<args>...]; from vllm.entrypoints.cli.main import main; main()"`.
+   Treat console-script launches of bind-mounted local dirs as suspect.
+7. **HF snapshot dirs contain SYMLINKS into `blobs/`** — a `docker -v` mount of the snapshot dir
+   breaks those relative links. Either `cp -rL` to a flat dir (works, doubles disk) or mount a
+   parent dir so links resolve inside the container.
+8. **Set the guest's memory BEFORE starting the test VM with GPUs** — memory changes while a VM
+   is running don't apply on stop/start cycle you planned; a GPU handoff + RAM change + reboot must
+   be sequenced stop → config → start.
+
+Full V3 session detail (recipe audit, checkpoint header analysis, launch script, bench results):
+`/home/jordatech/flashnext-v3-20260924/HANDOFF-QWEN38-FLASHNEXT-V3-20260924.md`
 
 **pve.py guest-exec timing cap:** the helper's internal wait is ~120 s — any longer command (model
 loads, pip installs, downloads) must run detached (`setsid nohup ... < /dev/null &` inside a script
