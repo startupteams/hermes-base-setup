@@ -18,16 +18,21 @@ UPDATE hosts SET desired_service_state='SERVING' WHERE guest_ip='<ip>';
 ```
 Engine behavior (v011_recovery.py on VM114 `/opt/llm-manager/app/`): `MAINTENANCE` → logs `maintenance_skip`, never restarts; `SERVING` → bounded recovery (2 VM starts / 2 service restarts, cooldown, then FAILED). Backups: `v011_recovery.py.bak.maint`.
 
-**⛔ DUAL-TRIGGER CORRECTION (2026-09-24, proven on a GPU handoff):** the MAINTENANCE gate only
-covers the **HTTP-probe** restart path. A **stopped VM** with `desired_power_state='RUNNING'`
-still fires `outage_detected → recovery_vm_start` and the engine **restarted VM103 ~54 s after
-qm stop, re-claiming the GPUs mid-handoff** (recovery_events 2267-2269). For any operation that
-requires a GPU-owning VM to STAY down, set BOTH columns, then restore both:
+**⛔⛔ GATE CORRECTION v2 (2026-09-25, proven on the Flash-Next promotion — SUPERSEDES the
+2026-09-24 note):** `desired_power_state='STOPPED'` (+ `desired_service_state='MAINTENANCE'`)
+does **NOT** stop power-on recovery. Live evidence: recovery_events 2321 `outage_detected`
+`{"vm_status":"stopped","desired":"STOPPED"}` + 2322 `recovery_vm_start` restarted VM103 ~60 s
+after a clean stop **with both flags set**. Source (`/opt/llm-manager/app/v011_recovery.py`,
+tick()): the only leave-it-off path is §K3 —
+**`desired_power_state='STOPPED_INTENTIONAL'`**. `MAINTENANCE` gates only the HTTP-probe path;
+`STOPPED` alone still counts as an outage. For any planned stop of a GPU-owning VM:
 ```sql
-UPDATE hosts SET desired_power_state='STOPPED', desired_service_state='MAINTENANCE' WHERE guest_ip='<ip>';
+UPDATE hosts SET desired_power_state='STOPPED_INTENTIONAL' WHERE guest_ip='<ip>';
 -- ... work ...
 UPDATE hosts SET desired_power_state='RUNNING', desired_service_state='SERVING' WHERE guest_ip='<ip>';
 ```
+Verify the gate held across ≥2 recovery ticks (~30 s) before starting work that depends on the
+VM staying down, and check `recovery_events` for new `recovery_vm_start` rows after.
 (Creds: `/etc/llm-manager/secrets/pg_app_creds` on VM114, key=value format `PG_HOST/PG_DB/PG_USER/PG_PW`; source it, export PGPASSWORD, psql to CT115.)
 
 **Always run bench legs serially.** Two concurrent bench jobs on one host will saturate it and trigger the false-positive path even with SERVING semantics.
@@ -200,3 +205,45 @@ loads, pip installs, downloads) must run detached (`setsid nohup ... < /dev/null
 FILE) writing to a log, then poll. The qga channel also WEDGES under heavy RAM/page-cache pressure
 (repeated `HTTP 500: QEMU guest agent is not running` mid-load) — poll the VM from the node side
 (`/qemu/<id>/status/current` uptime/mem) and retry exec with patience instead of concluding the VM died.
+
+## Production promotion of a test-proven vLLM stack (2026-09-25, Flash-Next VM102→prod)
+
+Pattern for "promote the already-proven stack" plans — the model work is done; the risks are all
+orchestration. Full promotion detail: `references/flashnext-promotion-20260925.md`.
+
+1. **Recon live before acting:** read `/nodes/<n>/qemu/<id>/config` + `status/current` via the PVE
+   API for BOTH VMs — snapshots in old handoffs go stale (our snapshot lacked the 400G scsi3 disk
+   the live config had).
+2. **Tool calling on reasoning models is NOT free:** `vllm serve` 400s every OpenAI tools request
+   without `--enable-auto-tool-choice --tool-call-parser <name>`. Parser name discovery: pass a
+   wrong name once and read the KeyError's `chose from {…}` list. For Qwen3-family reasoning
+   models use `qwen3_xml` (NOT `qwen3` — that is the *reasoning* parser name; tool parsers are a
+   separate registry). `hermes` and `qwen3_coder` also exist. Verify with a synthetic tools request
+   (`get_weather`-style) before declaring the stack production-ready.
+3. **Registry registration is automatic — do not hand-INSERT model_registry rows.** Add the `hosts`
+   row (guest_ip/node/vmid/desired states), and the recovery engine's `sync_registry()` tick
+   probes `/v1/models` on the guest and upserts the registry row itself (healthy/routable iff
+   desired=RUNNING+MANAGED+probe OK). Hand rows risk drift with the sync logic.
+4. **LiteLLM config is only read at proxy boot:** after registry changes run
+   `/opt/llm-manager/venv/bin/python app/litellm_sync.py` (auto-backups config, write temp+rename)
+   then `systemctl restart litellm`. `--dry-run` first to inspect the generated entry.
+5. **Alias targets are HARDCODED in v011_core.py** (`fast`/`code`/`frontier` tuples in
+   sync_registry). Retiring a model's host without editing that tuple leaves the alias pointing at
+   a dark backend. Flag this to the owner rather than silently editing routing.
+6. **onboot audit on shared-GPU siblings:** before finishing, check `onboot` on BOTH VMs that claim
+   the GPUs. Found VM103 (rollback, powered off) with onboot=1 — at the next host reboot it would
+   race the production VM for the 6 GPUs (recovery engine would add a third contender). Set
+   rollback VM onboot=0, production VM onboot=1.
+7. **Restart-safety wrapper:** docker `--rm` containers need a systemd unit
+   (`Type=oneshot`, `RemainAfterExit=yes`, `TimeoutStartSec=1200` for ~9-min vLLM boots) wrapping
+   the launch script; enable it. Caveat: a container crash leaves systemd "active" (oneshot has no
+   supervision) — health comes from the recovery engine's HTTP probe, not systemd.
+8. **Validate at BOTH layers:** direct to the backend (`:8000`) AND routed through LiteLLM
+   (`:4000` with master key from `/etc/llm-manager/litellm_config.yaml`) — chat + tool + vision +
+   long-context needle + C4/C6 concurrency. Keep prompts ≤ ~60K *actual* tokens (repetitive filler
+   tokenizes ~2.5–3.9 chars/tok depending on corpus; the 70K limit error message tells you the
+   real count — binary-search the prompt size once, then reuse).
+9. **Rollback artifacts before the first stop:** snapshot the old prod unit
+   (`systemctl cat vllm.service`) ON THE SOURCE GUEST (a copy-pasted script once ran on VM114 —
+   "No files found" was the tell), note the preset id + revision id, and write the runbook
+   (gate → stop container → qm stop → restore desired states → qm start → verify) into the handoff.
