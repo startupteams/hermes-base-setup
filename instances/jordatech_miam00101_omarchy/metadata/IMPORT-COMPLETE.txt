@@ -1,0 +1,8 @@
+Migration COMPLETE (both sides): 2026-09-25 ~00:40 +05:45
+- Import verified: config UNCHANGED, state.db ok (4 sessions preserved), 35 skill categories,
+  186-session archive installed, SOUL merged (backup kept), memories namespaced.
+- Hourly exporter live (cron 150481b491a9) -> this branch.
+- VM906 hourly exporter live (cron 0c9b84306a9f on VM906) -> instances/jordatech_vm906.
+- agents.md completion notes: /home/jordatech/agents.md on VM906 (miam-00100 CT906).
+- Follow-ups: Omen agent should re-answer §19 questions itself; review 252-line conflict
+  reports; rotate leaked Vercel vck_/vcp_ + Google GOCSPX creds (scrubbed in archive).
