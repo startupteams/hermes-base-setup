@@ -104,3 +104,31 @@ Old cron can be restored by re-adding `hermes-stea-crmmiam02-backup` (script int
 VM906-side all ✔ (agent running, data intact, branch live, sync rewired, backups, no
 DB-over-git). Omen-side items pending import execution — checklist in
 `scripts/OMEN-IMPORT-RUNBOOK.md`.
+
+---
+
+## ADDENDUM 2026-09-25: Omen side COMPLETE — migration finished
+
+Executed over Tailscale SSH (miam-00133 → CT100 → `tailscale ssh jordatech@100.69.169.125`,
+after Jordan approved the one-time check-mode URL). Phases L–R all green:
+
+- **L:** 5.2 MB pre-backup on Omen (`~/hermes-migration-backups/20260925-003020/`)
+- **M:** branch `jordatech_miam00101_omarchy` created + pushed (now uses it as its home branch)
+- **N:** skills additive (`--ignore-existing`) → Omen now 35 categories; SOUL copies in
+  `migration_sources/vm906/`; memories in `imported_vm906{,_shared}`
+- **O:** 186-session archive at `~/.hermes/memories/imported_vm906_history/`
+- **P:** config checksums UNCHANGED (env/auth/config/install_id)
+- **Q:** state.db quick_check ok; Omen's 4 pre-existing sessions intact; Hermes Desktop
+  gateway verified running (z-ai/glm-5.3-flash, custom endpoint)
+- **SOUL merge:** applied (Omen base preamble + inherited entrepreneur/ops role +
+  constraints; backup `SOUL.md.backup-pre-vm906-merge-*`)
+- **§19 verification:** answered in `instances/jordatech_miam00101_omarchy/metadata/migration-verification.md`
+- **R:** Omen hourly exporter live (`portable_brain_sync.sh`, cron `150481b491a9`, 0 * * * *)
+
+Script fixes pushed to jordatech_vm906 during execution:
+1. Branch Omen instance from `jordatech_vm906` (not `main` — main's .gitignore blocks `instances/`)
+2. Refspec fetch (`git fetch origin '+refs/heads/X:refs/remotes/origin/X'`) — plain
+   `git fetch origin X` does not update remote-tracking refs
+
+Remaining for humans/agents: Omen agent re-answers §19 itself; review the 252-line
+skill-conflict reports; **rotate the leaked Vercel vck_/vcp_ + Google GOCSPX creds**.
