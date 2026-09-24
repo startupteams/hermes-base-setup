@@ -46,11 +46,39 @@ cronjob(action='create', no_agent=true, deliver='local',
 ### Other cron semantics
 
 - `cronjob.create` rejects absolute script paths in some contexts: `Script path must be relative to ~/.hermes/scripts/`. In a profile, put a wrapper in that profile's `scripts/` directory and pass only the filename.
-- Inline (non-path) script strings run fine; only file-path values are subject to the relative-path rule.
+- Inline (non-path) script strings are the normal case on gateways where they work; only file-path values are subject to the relative-path rule. HOWEVER, some gateway builds regress: the script SOURCE gets written as a FILENAME under `~/.hermes/scripts/` -> `[Errno 36] File name too long` (observed 2026-09-25 on BOTH scheduled fires and manual `action='run'` runs, jobs e46a076d17fd/e0f9ab452f0a/31a75865103d/c8faa1fe4176). If your first inline job fails this way, do NOT keep burning one-shots: the reliable shape is `script='<filename>.py'` where the file already exists under `~/.hermes/scripts/` (write it via a prior working job, or ask the user). See `references/cron-hostexec-failure-modes.md`.
+- `cronjob(action='run')` (manual fire) additionally treats an inline script string as a file path on affected builds — manual runs only ever work with a real file path there.
+- One-shot scheduler latency is not 1 minute in practice: jobs scheduled `in 1m` fired 2-5+ minutes late (or not until polled). For wait-and-read flows, poll with `cronjob(action='list')` (check last_run_at/last_status) rather than assuming the job already ran; `computer_use(action='wait', seconds=30)` is a usable no-op wait when the Docker-backed tools are down.
 
 ## Fallback 2: computer_use on a host terminal
 
 If a terminal app is open on the user's desktop, computer_use can type commands into it — but only if the window is enumerable. On Hyprland, `list_windows`/`read_window_below` fail when Hyprland's IPC socket isn't reachable from Hermes's session; don't burn turns retrying — go to Fallback 1. Note: computer_use itself is NOT Docker-backed — it still works when the sandbox is down, and `computer_use(action='list_apps')` can enumerate host processes for diagnostics.
+
+## Step 0: verify the execution surface BEFORE trusting a plan's commands (class-level rule)
+
+A plan or user instruction that says "run X on the host / install a service / host a model" may
+assume commands execute on the host OS when they actually run inside the Docker sandbox. Before any
+system-level work, fingerprint the surface: run `hostname` + check for `nvidia-smi`/`systemctl`.
+Sandbox signals: a container-ID hostname, root in a mount that maps the host's home subvolume, no
+GPU, no docker.sock. Consequences:
+
+- GPU model serving, systemd units, and multi-GB downloads CANNOT run in the sandbox — schedule them
+  host-side via the cron `no_agent` channel or have the user paste the long commands in a host
+  terminal (prefer the latter for long-running steps).
+- The sandbox shares the host's home filesystem, so you can still prepare and verify host files
+  (config backups, YAML patches, reports) without host exec.
+- Containers have their OWN loopback: a service bound to the host's `127.0.0.1` is unreachable as
+  `127.0.0.1` from inside the sandbox. Host processes (Hermes Desktop itself) reach it directly.
+
+## Step 1: try the fix before falling back
+
+Some 'sandbox down' errors are config gaps you can have the user fix in one command — try that before burning fallbacks. Triage by error text:
+
+- `proxy.enabled is true but iron-proxy is not configured` → ask the user to run `hermes egress setup` on the host, then `hermes egress start`. This is a two-stage fix: setup writes proxy.yaml (next error becomes 'not running on port 9090'), start launches the daemon. Both commands are host-side; the agent cannot run them itself because every Docker-backed tool is blocked at env creation.
+- `iron-proxy is enabled but not running on port 9090` → only `hermes egress start` is missing; `hermes egress start` may not survive a reboot, so expect to repeat it across sessions.
+- Docker-env creation success is itself proof Docker works: the terminal session runs inside a container (`/.dockerenv`, `172.17.x.x` IP). Do not demand a nested `docker run hello-world` — the sandbox has no docker CLI or socket, so that test always fails and proves nothing.
+
+When the fix succeeds, record it as a fix (command sequence), never as 'terminal is broken'.
 
 ## Do NOT capture as rules
 
