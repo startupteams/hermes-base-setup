@@ -431,6 +431,61 @@ as chmod-600 temp files only.
   script/patch file first, then execute it; use `patch` for local-file edits
   instead of terminal heredocs.
 
+## Model-swap playbook (V5 2026-09-23 — Gemma4 pool deployed in-window)
+
+End-to-end sequence that swapped VM109/VM111 to a new model inside one maintenance window, with
+benchmarks recorded into LLM Manager history:
+
+1. **Feasibility gate first** (see marion-vllm-bench-ops SKILL.md v2): arch adapter in the LIVE venv
+   registry, TP divisibility from ALL head dims, MoE expert-width % parallel-size, artifact size via
+   HF `?blobs=true`. Gemma4 passed: fork registry HAS Gemma4*, heads 16/KV 8 → TP2 OK, expert 704%2=0.
+2. **Parser discovery in this fork:** parser registries live at
+   `vllm.tool_parsers.abstract_tool_parser.ToolParserManager` and
+   `vllm.reasoning.abs_reasoning_parsers.ReasoningParserManager`; call `.list_registered()`
+   (0.28 fork has `functiongemma, gemma4, hermes, qwen3_coder, qwen3_xml` tool + `gemma4, qwen3`
+   reasoning). Gemma4 needs `--tool-call-parser gemma4 --reasoning-parser gemma4`.
+3. **Unit swap with backup:** edit ExecStart in the host's canonical unit (vllm.service on VM109,
+   vllm-qwen.service on VM111), keep `.bak.<ts>`, daemon-reload, then explicitly restart.
+   Crash-loop diagnosis: `systemctl show -p NRestarts` + `journalctl -u <unit> | grep -B8 AssertionError`
+   — root cause hides BEHIND wrapper errors ("WorkerProc initialization failed"); grep the Worker_
+   prefixed lines for the real assert.
+4. **Topological corrections found live:** Gemma4 needed `--enable-expert-parallel` (MoE 704 % 6
+   assert with TP2/DP3, same shape as Flash-Next's 640%6). One allowed correction per plan; verify
+   by watching NRestarts stay 0 and VRAM climb to expected load.
+5. **LLM Manager wiring after swap:** `litellm_sync.py` regenerates config from healthy registry rows
+   (unhealthy rows auto-drop from the pool — dead backends disappeared when 109/111 swapped);
+   restart litellm; then prove end-to-end with master-key chat completions per route + a tool-call
+   probe (tools JSON via gateway, expect proper `tool_calls` object). Record benchmark rows with
+   `deployment_revision_id` linkage; mark old revision RETIRED-SUCCESS, new one WORKING.
+6. **llama.cpp lane swap:** unit is `llama-server.service`; systemd strips raw JSON quotes in
+   ExecStart (single-quote JSON args if needed); reasoning models return empty content when
+   max_tokens is eaten by reasoning — test with 1500+ tokens and check `reasoning_content`.
+
+## LLM Manager history feature (v5 pattern — reuse for any new table/endpoint/UI card)
+
+Deployed 2026-09-23, all additive, zero downtime:
+
+1. **Schema first** (app venv python on VM114, creds from `/etc/llm-manager/secrets/pg_app_creds`
+   — KEY-VALUE format `PG_HOST/PG_DB/PG_USER/PG_PW`, NOT positional; SQL_ASCII DB → ASCII-only
+   literals or psycopg2 UnicodeEncodeError). `CREATE TABLE IF NOT EXISTS` + `ADD COLUMN IF NOT
+   EXISTS` for idempotency.
+2. **Patch app via staged file, never inline heredocs**: write a standalone patch script with
+   `assert ANCHOR in src` guards, `shutil.copy2` backup `main.py.bak.<tag>.<ts>`, `ast.parse`
+   the patched text BEFORE writing, abort loudly otherwise. Insert routes before the
+   `# ---- dashboard` anchor. Async POST routes (`async def` + `await request.json()`) to avoid
+   sync-body pain; role-gate writes on `CAN_EDIT_DEPLOY` with 401-first ordering.
+3. **Dashboard card**: patch the DASHBOARD_HTML between existing section anchors, append a JS
+   loader before the `</script></body></html>` anchor; check BOTH anchors exist or abort. Then
+   `systemctl restart llm-manager-web` (NOT llm-manager.service) and verify `/healthz` + `/login` 200.
+4. **Test with a forged session cookie inside the guest** (SESSION_KEY from the app import, 64-char
+   real key, not "dev-insecure-key"): `TimestampSigner(key).sign(base64.b64encode(json.dumps(payload)))`,
+   payload `{"user":..., "role":"Admin"}`; Starlette signs b64(json) with plain TimestampSigner.
+   Cookie: `session=<signed>`. Drive GET/POST via curl with that cookie — TestClient forging may 401.
+5. **Reuse pattern that works**: `hosting_command_presets` rows ARE the load-configuration mechanism
+   (save ≠ restart). Insert baseline revisions as presets keyed by scope_key=guest_ip with
+   content_hash = sha256(content); verify with a SELECT per scope. A failed experiment gets a
+   deployment_revisions row with `status='FAILED', visible_by_default=false` — retained but hidden.
+
 ## Template
 
 - `templates/llm-control-agent.sh` — the guest-side fixed-command control agent

@@ -95,3 +95,53 @@ note. Unit naming is not yet normalised (`vllm-qwen.service` on VM111 vs `vllm.s
 - LLM Manager is **v0.11.0** (`/healthz` → `version`); app = `/opt/llm-manager/app/main.py` (FastAPI,
   session-cookie auth), DB on CT115. Only `hosting_command_presets` exists — there are **no**
   history/benchmark tables or endpoints, so a "benchmark history" feature is greenfield, not an extension.
+  *(Updated 2026-09-23 evening: `deployment_revisions` table + `/api/history/*` endpoints + dashboard
+  history card now exist — see self-hosted-llm-gateway skill for the pattern.)*
+
+## Pre-flight feasibility gate v2 — architecture support, not just size math (2026-09-23, Flash-Next chain)
+
+The size-vs-VRAM gate (references/model-placement-feasibility.md) is necessary but NOT sufficient.
+Before any download, run these checks IN ORDER on the target venv (each one killed a phase of the
+Qwen3.8-Flash-Next attempt — full chain in `references/qwen4exp-flashnext-ampere-blockers.md`):
+
+1. **Arch adapter check:** does the target vLLM build's model registry know the architecture?
+   `grep -o '"Qwen4[^"]*"' .../vllm/model_executor/models/registry.py`. transformers having the
+   config class is NOT enough (transformers 5.16.1 knew `qwen4_exp`; vLLM 0.28.0 did not; upstream
+   0.30.0 added it). Never assume a newer transformers unblocks serving.
+2. **TP derivation from ALL head-count dims:** TP must divide num_attention_heads AND num_key_value_heads
+   AND every linear-attention head count. Flash-Next (24/2/16/48) → **TP ∈ {1,2} only** — a plan's
+   "TP2/PP3" hypothesis can be dead on arrival. Derive, don't copy.
+3. **MoE expert-width divisibility:** without EP, fused-MoE treats tp_size = TP×DP; expert
+   `moe_intermediate_size % (TP×DP) != 0` = hard assert. With EP the expert dim uses EP instead —
+   but see 4.
+4. **HC/seq-parallel conflicts:** some archs (Qwen4Exp hyper-connections) raise
+   `NotImplementedError` when EP+TP>1+DP>1 enables sequence-parallel MoE. Backends that avoid it
+   may be REMOVED from the pip build (`naive` a2a exists in source but 0.30.0's ParallelConfig
+   falls back to `allgather_reducescatter`); local sed-patches to vllm config are possible
+   (`.bak` + ast.parse check).
+5. **CPU-offloaded big tables multiply per worker:** Engram/PLE CPU offload allocates a shard per
+   WORKER, not per node — 17.5 GB × 6 workers = 105 GB shmem against a 108 GB guest = global oom-kill
+   every boot. `dp_shared_memory: true` did NOT deduplicate; `embedding_across_dp: true` failed a
+   divisibility assert (`320001536 % 6 != 0`). Shmem math must count per-worker before committing.
+6. **OOM forensics pattern:** `journalctl -k | grep "Out of memory"` shows per-process anon/file/shmem
+   RSS — the shmem number is what exposed the PLE multiplication. Sample with a loop script
+   (`AnonPages`/`Shmem`/`Cached` every 5s) during load; peak-shmem tells you which mechanism failed.
+
+**GGUF size claims — verify against the actual repo blobs.** A search-result claim ("smallest GGUF
+anywhere = 70 GB") was wrong by 10×: unsloth UD quants of Qwen3.8-27B go to 6.2 GB (IQ1_S), UD-Q4_K_M
+= 16.5 GB. Always enumerate `api/models/<repo>?blobs=true` per candidate repo before declaring a fit
+gate failed. Also: a 27B DENSE model on a 16-core CPU box measured **0.8 tok/s** — smaller quant ≠
+viable CPU serving; check the arch (dense vs MoE) before proposing CPU lanes.
+
+**vLLM major-version side-by-side pattern:** never upgrade the production venv (custom forks!).
+Build `/opt/vllm-venv-<ver>/`, verify with `pip show` + `import torch; torch.cuda.get_device_capability()`
+(SM86 supported in 0.30; SM90-only fast paths fall back gracefully — check `_gemm_plans()` returns {}
+→ falls back to F.linear). Stage artifacts on a separately-attached disk (hot-plug scsi + mkfs + fstab
+`nofail` works live) sized for the FULL artifact, and raise guest RAM BEFORE the load attempt
+(PVE `PUT config {memory: N}` then stop/start — hotplug of memory isn't reliable on existing VMs).
+
+**pve.py guest-exec timing cap:** the helper's internal wait is ~120 s — any longer command (model
+loads, pip installs, downloads) must run detached (`setsid nohup ... < /dev/null &` inside a script
+FILE) writing to a log, then poll. The qga channel also WEDGES under heavy RAM/page-cache pressure
+(repeated `HTTP 500: QEMU guest agent is not running` mid-load) — poll the VM from the node side
+(`/qemu/<id>/status/current` uptime/mem) and retry exec with patience instead of concluding the VM died.
