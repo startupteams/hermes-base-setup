@@ -342,6 +342,14 @@ In PBS 4.x, `keep-*`/`prune-schedule` live in **prune jobs**, and calendar event
 with a **disk-level marker** (`losetup -Pf --show` + mount the LV; `kpartx` is often absent) plus a
 console screendump — robust even when the guest has no agent/network.
 
+## GPU-VM model bring-up, disk swaps, and clone networking
+
+Full patterns in `references/vllm-model-bringup-marion.md`. Headlines:
+- **Cloned GPU-VMs boot networkless** — netplan is MAC-locked to the source VM; rewrite netplan via qga exec (works without network), then inject SSH keys the same way. Networkless vs wedged look identical from outside: check serial via `socat` + netplan MAC before concluding "hung".
+- **Rapid stop/start cycles around GPU passthrough can wedge the guest** (AER NonFatalErr Timeout on riser, qemu at 99% CPU with SILENT serial + no qga) — do NOT keep cycling; go straight to node reboot (authorized recovery class).
+- Shared model-disk swap between prod/test VMs: stop source, `qm set <src> --delete scsiN`, `qm set <dst> --scsiN local-lvm:vm-<src>-disk-N...`, start dst. Exclusive ownership, proven twice.
+- vLLM 0.30.0 Qwen4Exp: PP>1 banned (PLE needs input_ids), TP max 4 (GDN 16 key heads), PLE CPU-offload = one pinned-host copy at DP1; RoutedExperts loader can't do unfused AWQ-gemm under TP.
+
 ## RoCE / Ethernet MTU validation (and the AER root-port trap)
 
 Full procedure: `references/rdma-mtu-validation.md`. Highlights: identify `link_layer` with
