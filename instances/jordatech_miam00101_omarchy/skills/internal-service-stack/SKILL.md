@@ -5,6 +5,13 @@ description: "Use when deploying internal service portal stacks on MARION."
 
 # Internal Service Stack (MARION)
 
+## When to Use
+
+Use when building or extending the MARION internal service portal (Homarr), monitoring
+(Uptime Kuma), reverse proxy (Caddy internal CA), or the MIAM service registry API —
+including new VMs for those roles, LDAP wiring for them, reconciler/discovery changes,
+or debugging any of those components on the cluster.
+
 Build one internal portal + monitoring + registry stack on a dedicated PVE VM. Reference
 implementation lives on VM119 (`miam-service-dashboard`, 10.0.20.172); handoff doc also on
 that VM at `/opt/miam-dashboard/`. Workflow rules first, pitfalls attached to their step.
