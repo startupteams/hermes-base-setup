@@ -328,6 +328,18 @@ Full session recipe: `references/cx5-sriov-guest-rdma.md`. Ready runners: `scrip
 - **Line-rate result:** guest VF ↔ host PF and guest VF ↔ guest VF both ~95–97 Gb/s on 100G legs; NCCL selects `NET/IB ... RoCE` over VFs with no tuning beyond interface up + IPs.
 - **Background servers inside guests:** `nohup ... &` alone dies under `qm guest exec`; use `setsid nohup ... < /dev/null &` then `pgrep` to confirm alive.
 
+## PBS backup coverage audit + safe restore tests (proven 2026-09-26)
+
+Full methodology in `references/pbs-backup-verification-audit.md`; read-only one-pass collector in
+`scripts/pbs_coverage_audit.py` (guest inventory + job scope + PBS snapshot/verify state + newest
+backup ages). Headline traps: PBS snapshots API rejects `?limit=` (HTTP 400); **vzdump of a STOPPED
+VM with GPU-passthrough hostpci lines auto-starts kvm** → `PCI device already in use by VMID`
+against the VM holding those devices (one failing guest per night, "job errors" on that node);
+exclude the PBS datastore dataset from recursive host ZFS auto-snapshots (double retention); a
+restored CT/VM carries the ORIGINAL net0/production IP — set `ip=manual` + `onboot=0` before any
+boot (or verify via read-only qemu-nbd mount without booting); all-zero PBS GC stats usually mean
+"first GC slot not reached since install", not corruption.
+
 ## Proxmox Backup Server on a PVE host (+ real restore proof)
 
 Full recipe: `references/pbs-on-pve-deployment.md`. Highlights: install `proxmox-backup-server`
