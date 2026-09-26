@@ -23,7 +23,22 @@ Use when Jordan sends a zip (repo content / overlay trees) plus an instruction m
 8. **Stop at the plan's human gate.** Never self-merge. State clearly in the final reply which decision is waiting on Jordan (e.g. approve/modify a specific ADR).
 9. **Log the milestone to `~/agents.md`** (repo, commits, PR link + number, gate status, any fixes made during execution, local paths) and update memory only with durable facts (repo authorization, clone location) — not PR numbers/commit SHAs as standalone memory entries; agents.md is the log.
 
+## Continuing/revising an OPEN PR across sessions
+
+When a plan says "revise the existing PR, do not open a new one" (e.g. the ACMS PR #1 async-stack revision after ADR-0007 acceptance):
+
+1. Re-derive state from the live repo first: `git status`, `git log --oneline`, `gh pr view N --json state,updatedAt`, and re-read the plan's stop conditions. Prior-session work may sit uncommitted in the working tree — validate it, don't redo it.
+2. Re-run the FULL validation suite in the live repo before committing (tests, stack-validation script, compile check, secret scan) — never trust the previous session's "it passed".
+3. Commit as focused follow-up commits on the same branch (`feat(...)` / `test(...)` / `docs(...)` split), push, and **update the PR body** to reflect the revision (see pitfall below — `gh pr edit` fails silently on this). Merge stays a human action.
+4. Write a new dated handoff doc in the repo (`docs/handoffs/<date>-<slug>.md`) with a validation table of exact executed commands + results, commit it on the branch, attach the path in the final reply.
+
 ## Pitfalls
+
+- **`gh pr edit --body-file` silently fails on orgs with projects-classic**: errors with a "Projects (classic) is being deprecated" GraphQL message, exits non-zero, and the body is NOT updated. Use the REST fallback `gh api -X PATCH repos/OWNER/REPO/pulls/N --input -` (JSON `{"body": ...}` on stdin), then VERIFY with `gh pr view N --json body -q .body | grep -c "<unique-marker>"`.
+- **`&&` chains abort on a no-match grep.** `grep -c pattern file && git add ...` returns rc=1 when the count is 0, silently skipping the rest of the chain (a commit+push never ran and looked "done"). Run commits/pushes as their own commands, or append `|| true` to informational greps.
+- **Foreground terminal refuses inline scripts that spawn a server** ("appears to start a long-lived server/watch process") even when the script self-terminates. Write the script to a file (e.g. `scripts/validate_*.py`) and run it with `terminal(background=true, notify_on_complete=true)`; keep it printing a clear PASS line.
+- **No Docker needed to validate a real PostgreSQL stack**: the `pgserver` dev extra runs embedded PostgreSQL 16 — `pgserver.get_server(dir, cleanup_mode="delete")` gives a URI for Alembic-upgrade-from-zero, uvicorn-subprocess HTTP checks, and after-exit durability queries. Recipe: `references/pg-stack-validation-no-docker.md`. Do NOT record "docker is unavailable" as an environment constraint; use this path.
+- **Accidental branch creation from defensive commands**: a guard like `git checkout -b <branch>-tmp 2>/dev/null` succeeds and leaves you on the temp branch with the same content — verify `git branch --show-current` before committing, and delete stray temp branches.
 
 - **Build artifacts sneak into `git add` of directories.** Running pytest/pip-install inside the repo creates `__pycache__/`, `*.egg-info/`, `.venv*/`, local `*.db`; `git add acms tests` sweeps the .pyc files in even when the plan lists exact paths. Before committing: `git status --short --ignored`, check `.gitignore` covers `__pycache__/`, `*.py[cod]`, `.venv*/`, `*.egg-info/`, `*.db`; extend it (with `patch`/append, never overwrite) or delete artifacts first. If a commit already caught them: `git rm -r --cached <dirs>` + extend `.gitignore` + follow-up `chore:` commit on the same PR branch (don't rewrite pushed history).
 - **Instruction scripts assume `unzip`, a writable `$HOME/work`, and exact python availability** — substitute equivalents (python zipfile, explicit REPO_DIR, versioned interpreter + venv) rather than failing.

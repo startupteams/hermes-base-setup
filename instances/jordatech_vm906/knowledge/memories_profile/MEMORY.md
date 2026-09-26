@@ -2,7 +2,7 @@ Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Econ
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-AgentifyMe.co: startupteams/agentifyme_server_setup (authorized). ACMS: startupteams/acms-project-framework (authorized 09-25), clone ~/work/acms-project-framework; PR#1 feat/ACMS-001 awaits Jordan's ADR-0007 review; no direct-to-main after bootstrap.
+ACMS: startupteams/acms-project-framework (authorized 09-25), clone ~/work/acms-project-framework (.venv-acms py3.12); PR#1 feat/ACMS-001 = async stack (asyncpg+Alembic), ADR-0007 Accepted, revision commits pushed 09-26 awaiting Jordan merge review; no self-merge, no direct-to-main; gh PR body edits need REST api (GraphQL gh pr edit breaks on projects-classic).
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
