@@ -470,7 +470,7 @@ This usually means PDM has authentication working but ACL/resource permissions a
 - user-specific `GET /access/permissions` includes expected paths such as `/`, `/access`, `/resource`, `/system`;
 - at least one PDM remote exists and resources are visible via `/resources/status` and `/resources/list`.
 
-### LLDAP: password setting, memberOf, and default ACLs (v0.6.x realities)
+### LLDAP: password setting, memberOf, and default ACLs (v0.6.x realities; corrected 2026-09-26)
 
 - **No admin password-reset exists** — not in the GraphQL API, not as a CLI tool. Working
   path: bind as `uid=admin,ou=people,<base>` over LDAP :3890 and run the **password-modify
@@ -481,14 +481,22 @@ This usually means PDM has authentication working but ACL/resource permissions a
 - **Regular users see only themselves in the directory** (default ACL; no ACL section in the
   config). A service bind account created for user lookup CANNOT search `ou=people` until it
   joins the built-in `lldap_strict_readonly` group.
-- **LLDAP does not expose `memberOf` over LDAP** (groups are virtual, GraphQL-only). App code
-  doing role lookup must search `ou=groups,<base>` with `(member=<userDN>)` and read `cn` —
-  filtering user attributes for `memberOf` returns ABSENT and silently breaks login→role
-  mapping ("no role assigned" errors with a valid password).
-- GraphQL arg shapes differ by version: `createGroup(name: ...)` returns `Group { id }` (not
-  `ok`); `addUserToGroup(userId:, groupId:)` returns `Success { ok }`;
-  `createUser(user: CreateUserInput!)` takes a variable, not inline args. Introspect before
-  scripting.
+- **CORRECTION (2026-09-26, live ACMS deployment): LLDAP DOES return `memberOf` over plain
+  LDAP :3890 when explicitly requested** (bind as a service account in
+  `lldap_strict_readonly`, `conn.search('ou=people,<base>', '(uid=x)',
+  attributes=['memberOf'])` → list of group DNs). The earlier "memberOf is GraphQL-only"
+  claim was an ldap3 ACCESS-pattern failure, not an LLDAP limitation. The real trap is the
+  ldap3 client API: **`entry.attributes.get('memberOf')` raises
+  `LDAPCursorAttributeError: attribute 'attributes' not found`** (ldap3's Entry intercepts
+  attribute access). Use **`entry.entry_attributes_as_dict.get('memberOf', [])`** — this
+  works and is what shipped in the ACMS UI fix. Also verify the BASE DN via rootDSE first
+  (`namingContexts`) — the MARION LLDAP still runs the default `dc=example,dc=com`, and
+  binding with a guessed base gives "Not a subtree of the base tree".
+- GraphQL arg shapes differ by version: `createGroup(name: ...)` returns the group (proven
+  2026-09-26: acms-admin/workers/observers created this way); `addUserToGroup(userId:,
+  groupId:)` returns `Success { ok }`; the group-detail query arg is **`group(groupId: N)`,
+  NOT `id`**; `createUser(user: CreateUserInput!)` takes a variable, not inline args.
+  Introspect before scripting.
 - **Group membership WRITES go through GraphQL only (proven 2026-09-13).** The LDAP port
   3890 is effectively read-only for group membership: an ldap3 `MODIFY_ADD` on a group's
   `member` attribute as an lldap_admin user fails with `session terminated by server` (and

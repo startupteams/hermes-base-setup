@@ -2,7 +2,7 @@ Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Econ
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-ACMS: startupteams/acms-project-framework (authorized 09-25), clone ~/work/acms-project-framework (.venv-acms py3.12); PR#1 async stack MERGED, ADR-0007 Accepted. PR#2 feat/ACMS-046 = live UI+deploy pkg (LLDAP login/roles, Jinja2 UI, compose+nginx) OPEN 09-26 awaiting Jordan review; no self-merge; deploy needs TLS cert + real LLDAP DNs + explicit deploy approval; gh PR body edits need REST api (GraphQL gh pr edit breaks).
+ACMS: repo startupteams/acms-project-framework, clone ~/work/acms-project-framework (.venv-acms py3.12). LIVE: MIAM-00135 CT122 acms @10.0.20.122 (self-signed TLS, LLDAP dc=example,dc=com: acms-admin/16=jordatech, workers/17, observers/18). PR#2 merged; PR#3 fix/ACMS-ldap-attribute-access OPEN = repo==prod. No self-merge.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
@@ -16,6 +16,6 @@ Jordan: grants broad server autonomy (break OK — document, fix, don't stop); l
 §
 MARION infra: LLM Mgr VM114@.108 (v0.11.0); PG CT115@.116; LLDAP@.101. Workspace ~/.llm-manager-v011 (pve.py, creds 0600). PVE: guest-exec arg[]+poll; GET=querystring; LXC exec 501; VM114 qga can wedge.
 §
-FlashNext V3 SUCCESS (09-24): prod on VM102; recipe/artifact quirks in agents.md / ~/flashnext-v3-20260924/.
+FlashNext V3 prod on VM102 (09-24). PVE quirks: guest console automation impossible via API — deploy LXCs w/ ssh-key at create; 00135 has internet; LLDAP writes via HTTP :17170 GraphQL addUserToGroup only; MARION has NO home.arpa DNS — raw IPs.
 §
 LLM Manager recovery DUAL trigger: desired_service_state=MAINTENANCE gates only HTTP-probe restarts; desired_power_state=RUNNING + observed VM stop fires outage_detected→vm_start regardless. GPU handoffs need BOTH power=STOPPED + service=MAINTENANCE, restore both after.
