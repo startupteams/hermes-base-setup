@@ -2,7 +2,7 @@ Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Econ
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-ACMS: startupteams/acms-project-framework (authorized 09-25), clone ~/work/acms-project-framework (.venv-acms py3.12); PR#1 feat/ACMS-001 = async stack (asyncpg+Alembic), ADR-0007 Accepted, revision commits pushed 09-26 awaiting Jordan merge review; no self-merge, no direct-to-main; gh PR body edits need REST api (GraphQL gh pr edit breaks on projects-classic).
+ACMS: startupteams/acms-project-framework (authorized 09-25), clone ~/work/acms-project-framework (.venv-acms py3.12); PR#1 async stack MERGED, ADR-0007 Accepted. PR#2 feat/ACMS-046 = live UI+deploy pkg (LLDAP login/roles, Jinja2 UI, compose+nginx) OPEN 09-26 awaiting Jordan review; no self-merge; deploy needs TLS cert + real LLDAP DNs + explicit deploy approval; gh PR body edits need REST api (GraphQL gh pr edit breaks).
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
@@ -16,6 +16,6 @@ Jordan: grants broad server autonomy (break OK — document, fix, don't stop); l
 §
 MARION infra: LLM Mgr VM114@.108 (v0.11.0); PG CT115@.116; LLDAP@.101. Workspace ~/.llm-manager-v011 (pve.py, creds 0600). PVE: guest-exec arg[]+poll; GET=querystring; LXC exec 501; VM114 qga can wedge.
 §
-FlashNext V3 SUCCESS (09-24): todiadiyatmo recipe + W4A16-Attn8-FP8PLE artifact; TP2xPP3/EP on 6x3080; ~24 tok/s/agent C4-C6; stack VM102 /opt/hf-fork run_stage.sh; MTP+FP8KV pending. Details: agents.md / ~/flashnext-v3-20260924/.
+FlashNext V3 SUCCESS (09-24): prod on VM102; recipe/artifact quirks in agents.md / ~/flashnext-v3-20260924/.
 §
 LLM Manager recovery DUAL trigger: desired_service_state=MAINTENANCE gates only HTTP-probe restarts; desired_power_state=RUNNING + observed VM stop fires outage_detected→vm_start regardless. GPU handoffs need BOTH power=STOPPED + service=MAINTENANCE, restore both after.
