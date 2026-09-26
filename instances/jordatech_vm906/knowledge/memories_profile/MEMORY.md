@@ -2,7 +2,7 @@ Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Econ
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-ACMS: startupteams/acms-project-framework, clone ~/work/acms-project-framework (.venv-acms py3.12). LIVE CT122 @10.0.20.122 == main eab493f, rev 0002, repo at /opt/acms/repo. PR#2-4 merged; PR#5 ops/ACMS-safe-release-rollback OPEN (release.sh+rollback.sh safe-release tooling) awaiting Jordan. Next: Work UI slice. No self-merge; deploy needs explicit auth.
+ACMS: startupteams/acms-project-framework, clone ~/work/acms-project-framework (.venv-acms). LIVE CT122 @10.0.20.122 = 650d6f8 healthy. OPEN: PR#6 (drill fixes incl nginx inode) + PR#7 (Work UI v0.4.0, 52 tests, no migration). Deploy order: merge PR#6 → release 266d0ed → merge+deploy PR#7. Level-2 rollback proven live. No self-merge.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
