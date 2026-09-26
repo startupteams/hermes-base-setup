@@ -1,0 +1,6 @@
+[Unit]
+Description=Hermes private backup (MIAM-00101)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.hermes/scripts/backup-hermes.sh

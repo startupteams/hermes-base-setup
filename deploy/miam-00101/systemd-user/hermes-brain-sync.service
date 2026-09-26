@@ -1,0 +1,6 @@
+[Unit]
+Description=Portable-brain Git sync (MIAM-00101)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.hermes/scripts/portable_brain_sync.sh

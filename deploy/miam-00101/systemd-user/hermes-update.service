@@ -1,0 +1,6 @@
+[Unit]
+Description=Hermes update check/apply (backup-first, rollback-on-fail)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.hermes/scripts/update-hermes.sh
