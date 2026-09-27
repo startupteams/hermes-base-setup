@@ -189,3 +189,12 @@ known anchor lines, then re-verify with git diff.
   DB-loaded values (replace(tzinfo=utc) guard in the stale delta).
 - **Next steps logged in agents.md:** wire `ACMS_BRIDGE_TARGETS_JSON` into
   CT122 env + dispatch/control buttons in the UI; slices 5–9 per master plan.
+
+## JINT-001 — Server Manager integration (live 2026-09-27, prod c0e3cfaa)
+
+- `acms/server_manager_client.py` (urllib, contract pinned Server Manager API 1.0.0) + `/api/v1/server-manager` routes: POST /agents (persistent identity reservation + `provisioning_requests` row with authority provenance per REV4 §14: human_in_acms | human_in_server_manager | pre-authorized_sprint_execution_context), POST /requests/{id}/provision (calls SM; ownership refusals → 403, SM errors → 502), GET /requests/{id} (correlates live job/runtime state). Migration `0004_provisioning_requests`.
+- **Pitfalls found live:**
+  - **compose `environment:` enumerates explicitly** — new ACMS_* settings NEVER reach the container from `--env-file` alone; add passthrough lines to `deploy/compose.yaml` (live symptom: "Server Manager integration not configured" 503 despite env in /opt/acms/.env).
+  - **`env_prefix="ACMS_"`** — Settings fields map to `ACMS_<FIELD>` env vars; naming them `SERVER_MANAGER_*` (no prefix) silently leaves settings empty. Same class as the Keyname contract: check the prefix before writing env lines.
+  - **CT122 nginx 403s 127.0.0.1-originated API calls from inside the CT** (allowlist covers the CT IP, not loopback) — call ACMS APIs via `https://10.0.20.122`, not `https://127.0.0.1`.
+  - **ACMS repo has GitHub issues DISABLED** — reference `ACMS-REQ-###` in commit messages instead of creating issues (issue creation fails with "has disabled issues").

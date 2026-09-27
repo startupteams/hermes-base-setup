@@ -7,8 +7,10 @@ description: "Build the Git→CI→artifact→staging→production pipeline for 
 
 **Trigger this skill when:** asked to make a running service reproducible/deployable from Git, add CI/CD to a capture-style repo, build a staging environment, or implement "branch → CI → merge → artifact → staging → approval → prod" for VM-hosted services. NOT for container-native apps (use standard image pipelines) — this is for systemd/nginx/venv services deployed onto VMs.
 
+**First time wiring a runner + CD chain for a service?** Read `references/first-cd-run-bringup.md` — the canonical six-failure bring-up chain (unzip on runner CT, workflow_dispatch payload shape, checkout for piped scripts, relative artifact paths, scp-before-preflight, /tmp stale-artifact pick) + the bring-up gate (staging SHA from manifest, rollback proof, ledger records).
+
 Reference implementations (both `startupteams/*`, 2026-09-27):
-1. `llm-manager-project-framework` PRs #6–#22 — the canonical battle-tested script set (migrations ledger, clean-room bootstrap). **Proven legs:** staging + rollback. Unproven: production promotion (legacy flat layout still in prod).
+1. `llm-manager-project-framework` PRs #6–#22 — the canonical battle-tested script set (migrations ledger, clean-room bootstrap). **Proven legs:** staging auto-CD + production promotion (flat→`releases/<sha>` layout, 2026-09-27) + manual/auto rollback — all three legs exercised live, including real failed-transaction rollbacks (four failed prod transactions, each self-recovered, prod never left unhealthy).
 2. `pdu-marion-ia-usa-project-framework` PRs #7–#19 — simpler Flask/venv service; **proven END-TO-END through production cutover** (2026-09-27): protected `production` environment live, releases/current layout on the promotion VM (VM156) with the REAL backend, FW-018 config-schema gate inside the transaction, LXC 130 self-hosted runner, and a REAL production deploy (workflow run 36341622843: dispatch → env approval → runner → checksum → transaction → health 5/5 → release ACCEPTED). PDU repo deploy/ scripts (`set-backend-mode.sh`, `validate-read-only.sh`, `validate-config.py`, `logrotate/`, `production-deploy.yml`) are additional templates.
 
 The deploy/ directory in either repo is canonical — copy and adapt, don't rewrite.
