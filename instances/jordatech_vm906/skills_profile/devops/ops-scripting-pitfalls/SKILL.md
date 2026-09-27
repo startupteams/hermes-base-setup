@@ -71,7 +71,7 @@ These make a passing system report failure:
 Three smoke/healthcheck bugs in a row produced the same symptom — a correct deploy auto-rollback on false evidence:
 
 - **Restart-backoff false-negative**: the transaction restarts units then healthchecks immediately; a unit still in `Restart=on-failure` backoff (RestartSec=5–15) reads "not active". Healthcheck needs a bounded wait per unit: `for _ in $(seq 1 10); do systemctl is-active --quiet $u && return 0; sleep 3; done`.
-- **Route-inventory 404**: a 404 on an optional API route (`/api/benchmarks` absent in older releases) is a release difference, not a deploy failure — tolerate 404 in the route-alive check.
+- **Route-inventory 404**: a 404 on an optional API route (`/api/benchmarks` absent in older releases) is a release difference, not a deploy failure — tolerate 404 in the route-alive check. But tolerance MASKS phantom probes: verify each probed path against the app's real route inventory before trusting it (live case 2026-09-27: the check probed `/api/benchmarks`, which never existed — the real route was `/api/history/benchmarks`; the 404-tolerance then hid the bogus probe indefinitely).
 - **Auth-gate responses are PASSes**: a gated endpoint answering its auth error (`invalid or missing API key` on `/v1/models`) proves the route is alive with its gate enforced — don't fail on it; staging environments legitimately have no keys seeded.
 - **Post-rollback identity confusion**: when the candidate fails smoke and the transaction auto-rolls back, the post-rollback healthcheck correctly reports the PREVIOUS release's manifest. Read the log sequence (smoke FAILED → rollback started → healthcheck on old release) before diagnosing.
 - The rollback chain itself worked correctly every time — the bug was always in the acceptance criteria, never in the transaction mechanics.
@@ -86,6 +86,13 @@ Rules:
 - `apply`-style commands must print EVERY action taken; an `apply` run with no output lines is suspicious by default.
 - Add an explicit guard: `items = discover(); if not items: die("no <inputs> found in <dir>")` for anything that later writes state.
 - Same class: "verified 0 X", "applied 0 migrations", "0 files processed" on a supposedly-populated tree = treat as failure, not success.
+
+## 10. Sibling-script paths break under absolute invocation
+
+`./"$(dirname "$0")/preflight.sh"` — prefixing the dirname with `./` — works only when the caller uses a RELATIVE path. Invoked by absolute path (`sudo /opt/svc/current/deploy/deploy-release.sh <tarball>` — exactly what CD wrappers and operators do), `dirname` yields `/opt/svc/current/deploy` and bash resolves the sibling as `.//opt/svc/current/deploy/preflight.sh`: `No such file or directory` → FATAL preflight. Three call sites shipped in a release transaction before the first absolute-path invocation caught all of them (2026-09-27, staging re-deploy).
+
+- Rule: sibling scripts are invoked as `"$(dirname "$0")/sibling.sh"` — never with a `./` prefix gluing an absolute dirname back together.
+- `"$0"`-relative paths differ by invocation style (relative cwd, absolute, via sudo/wrapper). Test deploy tooling BOTH ways before shipping; the documented usage of transaction scripts is an absolute path, so that is the case that must pass.
 
 ## References
 

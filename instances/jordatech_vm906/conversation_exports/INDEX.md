@@ -1,8 +1,8 @@
 # VM906 Conversation History Index
 
-Exported: 2026-09-27T06:00:02.909823+00:00
+Exported: 2026-09-27T07:00:03.880875+00:00
 
-Sessions: 228 | Messages: 27950
+Sessions: 228 | Messages: 28025
 
 | # | Started | Source | Title | Msgs | File |
 |---|---------|--------|-------|------|------|
@@ -233,4 +233,4 @@ Sessions: 228 | Messages: 27950
 | 225 | 2026-09-27T04:06 | telegram | LLM Manager CI/CD VM Deployment Plan | 1101 | sessions/20260927_040637_f68e3e2b.md |
 | 226 | 2026-09-27T04:11 | subagent | (untitled) | 130 | sessions/20260927_041152_c703dc.md |
 | 227 | 2026-09-27T04:11 | subagent | (untitled) | 107 | sessions/20260927_041152_c57476.md |
-| 228 | 2026-09-27T05:48 | cli | LLM Manager CI/CD VM Deployment Plan #2 | 117 | sessions/20260927_054800_f05fe0.md |
+| 228 | 2026-09-27T05:48 | telegram | LLM Manager CI/CD VM Deployment Plan #2 | 192 | sessions/20260927_054800_f05fe0.md |
