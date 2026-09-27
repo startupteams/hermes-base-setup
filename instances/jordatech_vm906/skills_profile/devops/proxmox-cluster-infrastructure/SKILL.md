@@ -764,15 +764,35 @@ Userspace NFS avoids privileged-LXC/kernel-NFS compromises. Traps hit 2026-09-11
 - **Streaming quirk of the fleet's custom vLLM forks (`vllm-0.28.0-*`):** streamed chunks carry `delta.reasoning` (NOT the standard `delta.reasoning_content`) for reasoning models. Any TTFT/tok-s benchmark that only checks `content`/`reasoning_content` silently records null throughput on qwen3.6/qwen3.8 endpoints. Reusable benchmark runner: `scripts/stream_bench.py` (handles reasoning/content deltas, returns TTFT + tok/s + latency).
 - Old-model benchmark hygiene (Jordan's directive 2026-09-23): if a model family may be deprecated/broken, cap old-model work at ~1 hour and prioritize the new/target model — baselines can be captured retroactively. Pause at natural checkpoints (e.g. after benchmarks) when the owner signals incoming steering.
 
+- **Power-cycle latency: an outlet verified OFF does not mean the node died instantly** (learned 2026-09-27, authorized 00119 PDU test). A node can stay pingable ~25s+ after its PDU relay reads OFF (PSU holdup). A fast ping loop showing "still up" right after cutting an outlet is NOT evidence of a wiring mismatch — wait 30s+ minimum, and verify the node is REALLY down (PVE API unreachable + ping dead) before drawing wiring conclusions.
 ### PITFALL: raw urllib calls to node APIs need the /api2/json prefix
 
 Calling `https://<node>:8006/nodes/<node>/qemu` directly (or through any client that doesn't prepend it) returns `HTTP 500: no such file '/nodes/<node>/qemu'` — this looks like a broken cluster/permission issue but is purely a missing `/api2/json` prefix. The skill's `pve_api.py` wrapper handles it; hand-rolled urllib clients must prepend `/api2/json` to every path. Symptom signature: the SAME path worked minutes earlier in a different client → suspect prefix difference first, not cluster state.
+
+### vzdump of a promotion VM before cutover + task-UPID polling pattern
+
+One-time pre-cutover backup: `POST /nodes/<n>/vzdump` body `{"vmid": "...", "storage": "pbs-marion", "mode": "snapshot", "zstd": "1"}` → returns `{"data": "UPID:..."}` (a plain STRING, not a dict). URL-encode the UPID (`replace(":", "%3A")`) when polling `GET /nodes/<n>/tasks/<upid>/status` until `status != "running"`, then check `exitstatus == "OK"`. Verify the snapshot landed via `GET /nodes/<n>/storage/pbs-marion/content?content=backup` (newest ctime for the vmid). The daily all-guests job covers new guests automatically (excluded-list model), but a fresh pre-cutover snapshot is still worth one API call.
 
 ## Node identity & evidence hygiene
 
 - `hostname -s` guard at the top of every remote script (`[[ "$(hostname -s)" == <node> ]] || exit 1`).
 - Save every phase (SMART dumps, qualification, erase log, pool-create log, dataset log) as timestamped files under a phase dir with `umask 077`; quote only `SERIAL_CHECK_EXIT`-style rollups in chat.
 - `pct list`/`lvs` output tells you where a CT's disk actually is — after migration it's gone from the source's LVS; check the destination's `pct list` instead of assuming.
+
+### Guest start/stop: the API token CANNOT do it — use node SSH (proven 2026-09-27)
+
+The LLDAP bot API token (which handles reads, exec, config fine) gets **501 "Method not implemented"** on `POST /nodes/<n>/qemu/<id>/status/start|stop` and `/lxc/<id>/start` — the token lacks lifecycle perms and there is no error hint that it's a permission issue (it reads as an endpoint that doesn't exist). Working path: root SSH to the node (`~/.miam_root_pass` works for miam-00133/.135) and run `qm start <id>` / `pct start <id>` directly.
+
+### onboot=1 guests may NOT auto-start after a node power-cycle (verified 2026-09-27)
+
+`miam-00135` power-cycled (twice, unplanned) with several `onboot=1` guests (VM114, VM120, CT122) — **none of them came back up** after either boot. PVE's startall either didn't survive the rapid repeated cuts or has startup-order timing that failed silently. Rules:
+- After ANY node power event, enumerate guest states (`qm list`, `pct list`) and explicitly start what should be running — never assume onboot handled it.
+- Docker-compose services inside a started guest may ALSO need manual re-raise: the ACMS stack's containers did not auto-start with docker.service; recover with `docker compose --env-file /opt/acms/.env -f <repo>/deploy/compose.yaml up -d` (compose reads the env file from the project root, NOT `-f <path>` alone — a `-f` invocation from elsewhere errors `required variable X is missing a value`).
+- Record pre-incident guest-state expectations in handoffs so post-recovery verification is objective.
+
+### New LXC creation: template availability is per-node local storage
+
+Creating a CT on a node fails with `volume 'local:vztmpl/<template>' does not exist` if that node's `local` storage lacks the template — templates on OTHER nodes (miam-00147) don't help (local storage is node-local). Fix via `POST /nodes/<n>/storage/local/download-url` with the official repo URL (e.g. `http://download.proxmox.com/images/system/debian-12-standard_12.12-1_amd64.tar.zst`); a stale version URL 404s with `exit code 8` in the task. Then `POST /nodes/<n>/lxc` normally (`ssh-keys` key is NOT in the CT-create schema — use `password`).
 
 ## PVE host shell via API console
 

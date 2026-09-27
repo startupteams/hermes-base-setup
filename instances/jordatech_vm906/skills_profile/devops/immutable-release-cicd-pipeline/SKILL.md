@@ -1,6 +1,6 @@
 ---
 name: immutable-release-cicd-pipeline
-description: "Build the Git→CI→artifact→staging→production pipeline for an already-running service: releases/ + current-symlink layout, SHA-identified immutable artifacts, protected production environment, automatic application rollback, backend-mode promotion. Two proven reference implementations: llm-manager-project-framework (2026-09-27, 11 PRs) and pdu-marion-ia-usa-project-framework (2026-09-27, capture→CI/CD→production promotion prep, PRs #7–#16)."
+description: "Build the Git→CI→artifact→staging→production pipeline for an already-running service: releases/ + current-symlink layout, SHA-identified immutable artifacts, protected production environment, automatic application rollback, backend-mode promotion, self-hosted deployment runner. Reference implementations: llm-manager-project-framework (PRs #6–#22) and pdu-marion-ia-usa-project-framework (PRs #7–#19) — the PDU repo's pipeline is PROVEN END-TO-END through production cutover (2026-09-27: VM156 promoted, authorized dispatch → approval → runner → deploy → release ACCEPTED)."
 ---
 
 # Immutable-Release CI/CD Pipeline Construction
@@ -9,7 +9,7 @@ description: "Build the Git→CI→artifact→staging→production pipeline for 
 
 Reference implementations (both `startupteams/*`, 2026-09-27):
 1. `llm-manager-project-framework` PRs #6–#22 — the canonical battle-tested script set (migrations ledger, clean-room bootstrap). **Proven legs:** staging + rollback. Unproven: production promotion (legacy flat layout still in prod).
-2. `pdu-marion-ia-usa-project-framework` PRs #7–#16 — simpler Flask/venv service; **proven through production promotion PREP**: protected `production` environment live, releases/current layout deployed to the promotion VM (VM156) with the REAL backend, FW-018 config-schema gate inside the transaction. PDU repo deploy/ scripts (`set-backend-mode.sh`, `validate-read-only.sh`, `validate-config.py`, `logrotate/`) are additional templates.
+2. `pdu-marion-ia-usa-project-framework` PRs #7–#19 — simpler Flask/venv service; **proven END-TO-END through production cutover** (2026-09-27): protected `production` environment live, releases/current layout on the promotion VM (VM156) with the REAL backend, FW-018 config-schema gate inside the transaction, LXC 130 self-hosted runner, and a REAL production deploy (workflow run 36341622843: dispatch → env approval → runner → checksum → transaction → health 5/5 → release ACCEPTED). PDU repo deploy/ scripts (`set-backend-mode.sh`, `validate-read-only.sh`, `validate-config.py`, `logrotate/`, `production-deploy.yml`) are additional templates.
 
 The deploy/ directory in either repo is canonical — copy and adapt, don't rewrite.
 
@@ -21,7 +21,24 @@ When promoting a staging VM to Git-managed production of an ALREADY-live service
 2. Backend/mode switch = first-class guarded mechanism, not a manual edit: systemd drop-in is authoritative + machine-readable state file + fail-safe refusal (e.g. refuses `real` while staging throwaway secrets persist) + removes COMPETING drop-ins that set the same env var.
 3. **systemd drop-in ordering trap:** drop-ins apply in filename order and the LAST one silently wins. A legacy `mock-backend.conf` from install.sh shadowed the new `backend-mode.conf` — service stayed mock while the tool reported "real". Fix: current_mode() must scan ALL drop-ins; the switch must neutralize others setting the same var.
 4. Machine-readable mode MUST be observable: add `<mode>` field to the health endpoint (`/health` → `backend_mode`) so monitoring/validation can assert which backend is live. Verification ritual: check `/health` EVERY session before write-path tests (a tool's "already in mode X" message is not evidence — the health endpoint is).
-5. Cutover sequence (human-gated): promotion VM onboot=1 FIRST → controlled reboot verification → old prod onboot=0 → old prod ACPI shutdown (never stop-forcibly, never delete) → records. Old host untouched during prep = rollback is `qm start <old>`.
+5. Cutover sequence (human-gated): promotion VM onboot=1 FIRST → controlled reboot verification → old prod onboot=0 → old prod ACPI shutdown (never stop-forcibly, never delete) → records. Old host untouched during prep = rollback is `qm start <old>`. Backups: take a one-time PBS snapshot of the promotion VM before cutover (`POST /nodes/<n>/vzdump` with `storage: pbs-marion, mode: snapshot`; poll the UPID task to OK) and verify the old host's newest backup age.
+
+### Production-deploy workflow pattern (proven E2E, pdu repo `production-deploy.yml`)
+
+```yaml
+jobs:
+  verify-artifact:      # ubuntu-latest: resolve SHA (see pitfall), build artifact, upload
+  deploy:
+    needs: verify-artifact
+    runs-on: ${{ vars.PDU_DEPLOY_RUNNER_LABEL || 'ubuntu-latest' }}   # self-hosted runner label via repo VARIABLE
+    environment: production                                            # job-level = the approval gate
+    concurrency: { group: production-deploy, cancel-in-progress: false }
+```
+
+- Runner-side mechanics: repo secret `PDU_DEPLOY_SSH_KEY` (dedicated ed25519 keypair) + repo variables `PDU_DEPLOY_RUNNER_LABEL`, `PDU_DEPLOY_HOST`. The job writes the key to a 600 file, scp's the artifact, and ssh-executes the on-box transaction script. **If the runner label var is unset, the job lands on ubuntu-latest which CANNOT reach the private network — make that path print the authorized agent-deploy command and exit 3 rather than faking success.**
+- **Self-hosted runner provisioning (LXC recipe, proven):** Debian 12 CT (template may need `download-url` to the node's local storage first — debian-12-standard_12.12-1_amd64.tar.zst; older version URLs 404 with exit 8), 1C/1G/8G, unprivileged, `nesting=1`, `onboot=1`, static IP. Install runner binaries under a DEDICATED non-root user (`config.sh` refuses sudo; `svc.sh install <user>` as root). Registration token via `POST /repos/<o>/<r>/actions/runners/registration-token` (repo-scoped, ~1h validity). Labels like `<svc>-deploy,<vm>-deploy` drive `runs-on` selection.
+- **Approving your own dispatch is possible via API:** `POST /repos/<o>/<r>/actions/runs/<run_id>/pending_deployments` with `{"environment_ids": [<env-id>], "state": "approved", "comment": "..."}` — works when the token's user is the configured reviewer (`current_user_can_approve: true` in the GET of the same path). The deployments/statuses endpoint is NOT the approval mechanism (422 on `state: approved`).
+- **Run "waiting" ≠ broken:** `gh run list` shows `status: waiting` while the environment approval is pending; `verify-artifact` succeeds while `deploy` waits. Approve via the API above, then the deploy job runs on the labeled runner.
 
 ## The architecture (plan §2 of the reference plan)
 
@@ -102,6 +119,9 @@ Provision staging ONLY from: GitHub artifact + documented external secrets + doc
 - **Merging under agent tool-call timeouts**: `gh pr checks --watch` blocks past 60s tool timeouts — right after `gh pr create`, checks take ~20–40s to even register ("no checks reported on branch" ≠ failure). Pattern: sleep ~25s → snapshot `gh pr checks N | awk '{print $1,$2}'` → bounded re-check loop (sleep 15–30s until `pending`=0) → merge. `gh run view <id> --log-failed` is empty for runs that never got jobs — read its `conclusion`/`jobs` JSON instead.
 - **Protected environment JSON via file, not inline heredoc**: piping a heredoc with inline command-substitution into `gh api --input -` produced "Problems parsing JSON" (HTTP 400); writing the JSON to `/tmp/env-prod.json` first (with `JID=$(gh api users/<login> --jq .id)` substituted in the heredoc) then `gh api -X PUT repos/$OWNER/$REPO/environments/production --input /tmp/env-prod.json` worked first try. Verify with `gh api repos/$OWNER/$REPO/environments --jq '.environments[].name'`.
 - **Regenerable build artifacts (`dist/`) keep re-entering commits**: `git rm -r --cached dist/` fixes only the current branch's index — the next `git add -A` after a local build sweeps them in again on every new branch. Fix `.gitignore` on the FIRST occurrence, not just the index; grep `git status -s` before each commit.
+- **Single-SHA checkout has no remote refs** (found live, production-deploy first run): `git branch -r --contains "$SHA"` inside an actions/checkout of a specific SHA returns NOTHING, so a "is this SHA on main" check fails with "not on main" for a perfectly valid main tip. Verify against `git ls-remote origin refs/heads/main` equality instead.
+- **Deploy SSH username must match the target's authorized restricted user exactly** (found live): the runner reached VM156 fine but used `pdu-runner@` while the authorized user was `pdurunner@` → `Permission denied (publickey)`. The failure surfaces as a workflow failure at the scp/ssh step, not a runner-registration problem.
+- **A workflow change does not take effect for a run dispatched from the old SHA** — dispatch with no `sha` input after merging the fix (default = new main tip), or the old workflow definition runs again.
 
 ## GitHub-side configuration (API, not UI)
 

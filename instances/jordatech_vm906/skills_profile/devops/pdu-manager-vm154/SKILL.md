@@ -1,24 +1,24 @@
 ---
 name: pdu-manager-vm154
-description: "Operate the Rack PDU Power Control Center — VM154 (10.0.20.154) production and VM156 (10.0.20.156) Git-managed promotion target, REAL backend on both since 2026-09-27. LLDAP auth, /api/v1 for AI agents, protected-outlet invariants, backend-mode mechanism, deploy pipeline, cutover runbook."
+description: "Operate the PDU Manager — PRODUCTION = VM156 (10.0.20.156, on miam-00133) since the 2026-09-27 cutover; VM154 = powered-off fallback (onboot=0). REAL backend, LLDAP auth, /api/v1 (LLDAP Basic only), protected-outlet invariants, backend-mode mechanism, Git→CI→runner→VM156 deploy pipeline, authorized power-cycle test protocol."
 ---
 
-# PDU Manager on VM154 (10.0.20.154)
+# PDU Manager — PRODUCTION = VM156 (10.0.20.156) after 2026-09-27 CUTOVER
 
-**STATE CHANGE 2026-09-27: the GitHub repo `startupteams/pdu-marion-ia-usa-project-framework` is now the authoritative source (capture complete, issues #1+#6 closed, PRs #2–#9 merged).** All operational facts below are verified-live AND documented in the repo (`docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`, `docs/DEPLOYMENT.md`, `docs/handoffs/2026-09-27-*.md`). For code changes: branch → PR → CI → merge → staging (VM156) → approved prod deploy. Do not edit VM154 files in place.
+**CUTOVER EXECUTED 2026-09-27 (Jordan authorized full session autonomy):** production = **VM156** (release `3cd8d89+`, `backend_mode: real`, `onboot=1`). VM154 = **POWERED OFF, `onboot=0`**, untouched fallback — rollback = `qm start 154`. All work on this system flows Git → CI artifact → protected `production` environment (reviewer jordatech) → LXC 130 self-hosted runner → transactional deploy on VM156 (issues #1/#6/#10 closed; PRs #2–#19 merged). Do not edit any production VM's files in place.
 
-V3 upgrade shipped 2026-09-11 (LLDAP + AI API). Repo also carries the full docs baseline (24 REQs) and a mock-backend deploy pipeline (`deploy/` scripts + `app/mock_pdu_backend.py`, `PDU_BACKEND=mock`).
+First REAL actuation of the new production system was the authorized MIAM-00119 power-cycle test (see §Live power-cycle test below) — the full ON/OFF/REBOOT path works end-to-end through VM156's audited UI.
 
-## VM156 (10.0.20.156, miam-00133) — PRODUCTION-PROMOTED 2026-09-27: NOT a safe test box
+## VM156 (10.0.20.156) — ACTIVE PRODUCTION; VM154 = cold fallback
 
-⚠️ **STATE CHANGE (Future Work v2 sprint, PRs #11–#16): VM156 runs the REAL PowerAlert backend.**
-`/health` → `backend_mode: real`; authoritative switch = systemd drop-in `/etc/systemd/system/pdu-control.service.d/backend-mode.conf` (`PDU_BACKEND=real`); machine-readable copy at `/etc/pdu-control/backend_mode.json`. Production secrets are provisioned there from VM154 (out-of-Git pipe path). **ON/OFF/REBOOT actuation tests are forbidden on BOTH VMs.** Mock-mode action-path tests are only valid while mock is VERIFIED active: check `curl -sk https://127.0.0.1/health` for `backend_mode` FIRST, every session, before any write-path test. There is NO mock test box by default anymore.
-- Debian 12, 1C/1GiB/16G; `onboot=0` until the human-approved cutover (runbook: repo `docs/CUTOVER_RUNBOOK_VM154_TO_VM156.md`); access = SSH as `jordatech` + passwordless sudo (qga inactive by default; `sudo -S` password piping is tool-guard-blocked).
-- Release layout (ADR-0003): `/opt/pdu-control/releases/<sha>/` + `current` symlink; current = `cba0eec` (main tip) as of 2026-09-27. FW-001 authoritative labels live; config backups at `/var/backups/pdu-control/`.
-- Backend switch: `sudo /opt/pdu-control/current/deploy/set-backend-mode.sh real|mock|status` — refuses `real` while staging throwaway secrets persist; removes competing `PDU_BACKEND` drop-ins (systemd applies drop-ins in filename order, last one silently wins).
-- Non-actuating validation: `sudo bash deploy/validate-read-only.sh` (GET-only + emergency login POST; asserts unauth 401 and emergency-creds-REJECTED on `/api/v1` — V3 §21, by design).
-- Deploy flow: `./deploy/build-release.sh <sha>` → scp artifact+sha256 → `sudo bash deploy/deploy-release.sh <artifact>` (transactional: checksum → config backup → FW-018 schema gate → switch → health gate → auto-rollback) → healthcheck (read-only, never actuates).
+⚠️ **VM156 runs the REAL PowerAlert backend in production.** `/health` → `backend_mode: real`; authoritative switch = systemd drop-in `/etc/systemd/system/pdu-control.service.d/backend-mode.conf` (`PDU_BACKEND=real`); machine-readable copy at `/etc/pdu-control/backend_mode.json`. Production secrets are provisioned there from VM154 (out-of-Git pipe path). **There is NO actuation-safe test box anymore** — VM154 is off, VM156 is real. Any actuation requires Jordan's explicit authorization of the exact outlet+action. Check `curl -sk https://127.0.0.1/health` for `backend_mode` FIRST, every session, before any write-path test.
+- Debian 12, 1C/1GiB/16G; `onboot=1` (cutover flipped it); access = SSH as `jordatech` + passwordless sudo (qga inactive by default; `sudo -S` password piping is tool-guard-blocked).
+- Release layout (ADR-0003): `/opt/pdu-control/releases/<sha>/` + `current` symlink; current = `3cd8d89` as of 2026-09-27. FW-001 authoritative labels live; config backups at `/var/backups/pdu-control/`.
+- Backend switch: `sudo /opt/pdu-control/current/deploy/set-backend-mode.sh real|mock|status` — refuses `real` while staging throwaway secrets persist; scans ALL drop-ins for `PDU_BACKEND` (not just its own file) and removes competing ones (systemd applies drop-ins in filename order, last one silently wins — the legacy `mock-backend.conf` shadowing bug is fixed in the script).
+- Non-actuating validation: `sudo bash deploy/validate-read-only.sh [base_url]` (GET-only + emergency login POST; asserts unauth 401 AND emergency-creds-REJECTED on `/api/v1` — V3 §21, by design). NOTE: its default BASE_URL with no args hits an odd mode — pass `http://127.0.0.1:5000 app` explicitly for the on-box 5/5.
+- Deploy flow (automated path): `gh workflow run production-deploy.yml` (needs protected-env approval — same token CAN approve its own dispatch via `POST /repos/<o>/<r>/actions/runs/<id>/pending_deployments` with `{environment_ids, state:"approved"}`). Manual path unchanged: `./deploy/build-release.sh <sha>` → scp artifact+sha256 → `sudo bash deploy/deploy-release.sh <artifact>`.
 - Read-only real-backend state proof (FW-011): in-process `read_all_states` via the release venv python over all 3 PDU IPs — NEVER `control()`. Proven 2026-09-27: 72/72 outlets readable, all ON, zero actuation.
+- logrotate installed (FW-015); deploy keypair for LXC 130 authorized at `~pdurunner/.ssh/authorized_keys` on VM156 with `from="10.0.20.130"` pin + sudoers file `/etc/sudoers.d/pdu-deploy-runner` (exact allowlist: deploy-release.sh, rollback.sh, healthcheck.sh, validate-read-only.sh).
 
 ## Authoritative docs live in the repo now
 
@@ -90,15 +90,11 @@ labels from VM backups, old plans, or stale docs.
 5. Host typically back on the PVE API ~2 min after ON; poll `GET /nodes/<node>/status` until
    200 with `uptime` > 30s, then give systemd ~60-75s before pct/zpool checks.
 
-## Access paths
-- Web UI: `https://10.0.20.154/` (TLS via nginx; :80 redirects). Login page =
-  LLDAP session + emergency root form. Legacy Basic-auth still honored on UI
-  routes (root creds staged at `~/.pdu_portal` on the Hermes box).
-- AI/API: `https://10.0.20.154/api/v1` — HTTP Basic with LLDAP creds. Test
-  agent `miam_0154_pdu_agent` (pdu-ai-agent + pdu-operator; NO override).
-  Creds `~/.pdu_lldap_service_creds` (0600).
-- In-VM shell: PVE API guest-exec on node miam-00133 VM 154 (bot account,
-  `~/.pve_ldap_bot`), urlencode body with doseq=True.
+## Access paths (post-cutover)
+- Production web UI: `https://10.0.20.156/` (VM156; TLS via nginx; :80 redirects). Login = LLDAP session + emergency root form (`mode=emergency`, `e_user`, `e_pass`). Creds staged in VM154-provisioned secrets.
+- Old prod UI (fallback only): `https://10.0.20.154/` — VM154 is powered off; do not expect it to answer.
+- AI/API: `https://10.0.20.156/api/v1` — HTTP Basic with LLDAP creds ONLY (emergency creds rejected by design, V3 §21). Test agent `miam_0154_pdu_agent` (pdu-ai-agent + pdu-operator; NO override). Creds `~/.pdu_lldap_service_creds` (0600).
+- In-VM shell: SSH as `jordatech` (10.0.20.156) + passwordless sudo — the reliable path (qga is inactive on VM156; the PVE-API guest-exec path works for VM154 when it is booted).
 - TLS cert: self-signed, DER sha256
   `137308d592260184fd75b7a555e27f61332a8c7ffe5feb1f58d1c5553b2221a9`.
 
@@ -150,9 +146,12 @@ Idempotency persists across restarts (/var/lib/pdu-control/idempotency.json).
   on big single posts).
 - LLDAP GraphQL: `user(userId:)` not `user(id:)`; introspect mutations.
 
-## Live-test outlet (human-authorized tests only)
-MIAM-00151 outlet 4: unlabeled, unprotected, no mapped asset — the only outlet ever used for
-live ON/OFF tests (re-verified safe before each destructive test). Any live actuation still
-requires explicit human authorization of the exact outlet+action per repo AGENTS.md §12 — and
-since VM156 also runs the real backend, there is NO actuation-safe test box unless
-`set-backend-mode.sh mock` is deliberately run (and its mode verified via /health).
+## Live power-cycle test protocol (learned 2026-09-27, authorized 00119 test)
+
+The authorized MIAM-00119 test validated the full actuation path through VM156 and produced durable wiring knowledge:
+
+- **Verified mapping:** `151:9 = MIAM-00119` (PVE node, Dell 7010). OFF dropped the node (~10s), ON restored it, PDU REBOOT (native Cycle Load) cleanly rebooted it. All three legs audit-logged.
+- **⚠️ Power-cut latency is NOT instant:** an outlet can read OFF at the PDU relay for ~25s+ before the attached node actually loses power (capacitors/PSU holdup). A fast ping loop showing "still up" right after OFF does NOT prove a wiring mismatch — wait 30s+ minimum before concluding anything.
+- **⚠️ 152:3 = miam-00135 = a LIVE Proxmox node** (hosts VM114 LLM-Manager, VM120, CT122 ACMS). Never dispatch "wiring probes" to 152:3. If a power-cycle of it ever happens accidentally: PVE `onboot=1` guests did NOT auto-start (twice) — verify guest states after any node power event, and ACMS containers need a manual `docker compose --env-file /opt/acms/.env -f /opt/acms/repo/deploy/compose.yaml up -d` re-raise. Recovery verified 2026-09-27 (TDR-0002).
+- **Pre-dispatch discipline:** quote the exact `ip + outlet + label` triple from `config/examples/config.example.json` in the dispatch reason; verify target identity against the authoritative config BEFORE the 202, and prefer the least-consequential asset for any probe.
+- Driving actuation via the emergency session: curl with cookie jar (`-c/-b`), `POST /api/action` JSON, then verify via in-process `read_state` (the app's venv python) — job polling from an emergency session 401s on `/api/v1`.
