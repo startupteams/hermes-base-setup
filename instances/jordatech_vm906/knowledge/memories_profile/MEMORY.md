@@ -2,7 +2,7 @@ Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Econ
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-ACMS: startupteams/acms-project-framework, clone ~/work/acms-project-framework (.venv-acms). LIVE CT122 @10.0.20.122 = 650d6f8 healthy. OPEN: PR#6 (drill fixes incl nginx inode) + PR#7 (Work UI v0.4.0, 52 tests, no migration). Deploy order: merge PR#6 → release 266d0ed → merge+deploy PR#7. Level-2 rollback proven live. No self-merge.
+ACMS: startupteams/acms-project-framework, clone ~/work/acms-project-framework (.venv-acms). LIVE CT122 = 9545123 v0.5.0 (slices 1+2 live: Work UI + Agent Detail). Pipeline ROUTINE: merge → release.sh <sha> → smoke. Remaining: slice 3 heartbeat (ACMS-side only until slice 4 bridge). Quirks: compose-v2 names acms-<svc>-1; app has no host ports (probe in-container); fetch before checkout. No self-merge.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
@@ -10,7 +10,7 @@ RDMA ring RoCE 100G, MTU 1500 (no jumbo); no persistent netcfg. PBS MIAM-00147 (
 §
 CX5 SR-IOV persistent (09-13): VFs→VM109 A/B, VM103/111 VF+PF; NCCL 95–97Gb/s. Recipe: proxmox skill cx5-sriov-guest-rdma.md.
 §
-MARION net: DHCP .190–.250; CT906 pinned .195; MIAM-00115 owns .115; MACs bc:24:11:*. Omen: dual-boot on tailnet — Omarchy miam-00101-1-omarchy @100.69.169.125, Windows miam-00101 @100.125.115.96; via miam-00133 → pct exec 100 tailscale ping/ssh; not a PVE guest; PVE auth needs root@pam suffix.
+MARION: no home.arpa DNS (raw IPs); CT906 pinned .195; MIAM-00115 owns .115. Omen dual-boot on tailnet (Omarchy 100.69.169.125, Windows 100.125.115.96; via CT100 tailscale ssh; not a PVE guest; PVE auth = root@pam).
 §
 Jordan: grants broad server autonomy (break OK — document, fix, don't stop); live handover .md; questions before NEW plans then full autonomy; deliverable = single .md in work folder + Telegram upload.
 §

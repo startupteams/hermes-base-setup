@@ -30,6 +30,38 @@ Class of task: an internal control surface (login, role-gated read pages, dashbo
 - Roles: map directory group DNs → roles via configurable env vars; normalize case/whitespace; multi-group membership → highest-privilege wins (deterministic); unmapped authenticated user → denied (403, generic message — no user enumeration); LDAP down → 503.
 - Pages gate with a dependency that raises `HTTPException(303, headers={"Location": "/ui/login"})` on missing/invalid cookie.
 
+## Evolving a page module across feature slices (learned on ACMS Slice 2, v0.5.0)
+
+When a UI grows by vertical slices (list page in slice 1, detail page in slice
+2, ...), each new page module MUST reuse the shared helpers instead of
+re-deriving them locally — the duplicated version was a real merge-in bug:
+
+- **Auth/context:** depend on the same `current_user` / role helpers; import
+  the shared `_base_context(user)` (or equivalent) so footer/version/brand
+  render identically on every page. A page that builds its own context dict
+  renders `ACMS v  · build ` with EMPTY version — caught in a test failure's
+  diff output.
+- **Constants:** import display constants (e.g. the recorded-vs-delivered
+  notice) from the module that owns them rather than re-typing a near-variant.
+  The near-duplicate string ("Recorded assignments only" vs "Recorded
+  assignment only") broke an honesty assertion and fragmented the UX.
+- **Honesty/"not yet implemented" lists are living data:** the Home page list
+  must be re-audited every time a slice ships a backend capability (a shipped
+  primary-assignment feature left "primary assignment" in the not-implemented
+  list — a false claim on the dashboard). Add a test-time grep or PR-body
+  checklist item: does any page now claim something false about the backend?
+- **Cross-linking is part of the slice definition of done:** when a detail
+  page lands, add links from the parent list page(s) and from related detail
+  pages (both directions), plus tests asserting the `href` appears on each.
+- **Router mounting:** add the new module's router inside `install_ui(app)`
+  next to the others — a router defined but not mounted produces an app whose
+  `/ui/*` route set silently lacks the page (tests will 404).
+- **Additive service filters follow the existing pattern:** when a detail page
+  needs data filtered by a key the existing list function doesn't support,
+  add an OPTIONAL keyword param (e.g. `list_execution_tasks(agent_id=...)`)
+  mirroring the sibling function's signature style — additive only, no
+  existing caller affected, no schema change.
+
 ## LDAP auth recipe (ldap3)
 
 Service bind → user search (escaped filter, `memberOf`, `size_limit=1`) → **rebind as the found user DN with the supplied password** to verify it → map groups. Sync `ldap3` calls MUST run via `anyio.to_thread.run_sync` so the async event loop never blocks. Full flow, failure-classification table, and the fake-ldap3 test harness: see `references/lldap-auth-recipe.md`.
@@ -38,6 +70,18 @@ Service bind → user search (escaped filter, `memberOf`, `size_limit=1`) → **
 
 1. **TestClient + Secure cookies:** per-request `cookies=resp.cookies` goes through httpx's cookie jar, which **silently drops Secure cookies against `http://testserver`** → every subsequent page 303s to login. Full details and workarounds: `references/testclient-cookie-pitfalls.md`.
 2. **Live smoke test without the password:** register an agent via `/api/v1/agents/register` with the machine token, then **mint the session token directly** (`issue_token(user, role)` from `acms.ui.session_auth` with `ACMS_SESSION_COOKIE_SECURE=false`) and `curl -H "Cookie: acms_session=$TOKEN" /ui/...`. Assert: 303→login when unauthenticated, real values on pages (version, agent names, Alembic revision), logout's `Max-Age=0` cookie, and **zero bearer-token occurrences in any UI response**.
+ 3. **Template corruption lands differently than Python corruption:** Jinja
+    templates have no syntax gate (write-tool lint skips .html), so mid-write
+    corruption shows up as broken tables, stray closing tags (`</h2>` inside a
+    `<p>`), or truncated cells (`{">`), and is caught ONLY by `git diff`
+    review or a render-assertion test. Always review new-template diffs and
+    include one full-page-render assertion in the tests (assert a string from
+    every major section, which fails loudly on truncation).
+ 4. **Debug a render failure by diffing the page text, not just the assert:**
+    `client.get(...).text` in the pytest failure output IS the rendered page —
+    grep it for the neighboring strings to distinguish "string missing because
+    feature missing" from "string present but slightly different" (the plural
+    'assignments' vs 'assignment' case) before changing test or code.
 
 ## Deployment package shape
 

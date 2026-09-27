@@ -61,6 +61,19 @@ p.write_text("\n".join(lines) + "\n")
 - Write succeeded to a path you didn't specify → `git status --porcelain`
   for unexpected files, delete them, re-run git-clean checks.
 
+## No-lint file types (extra vigilance)
+
+`.html` (Jinja templates), `.md`, and other gate-less types get
+`lint: skipped` — syntax checks in step 1 are unavailable, so corruption
+survives until git diff or a render test. Observed corruption shapes in
+these types (2026-09-26, two instances): stray closing tags inside `<p>`
+(`…stale guess.</h2></p>`), truncated table cells (`<td><a href="…">{">`),
+and — via the PATCH tool, not just write_file — a duplicated header line
+inserted mid-file in a markdown log. For these types ALWAYS: (a) review the
+`git diff` hunks line-by-line right after writing, and (b) when a test
+renders the file, assert one string from every major section so truncation
+fails loudly.
+
 ## When verification found corruption (repair order)
 
 1. `git checkout -- <file>` (if tracked and pre-write state is good)

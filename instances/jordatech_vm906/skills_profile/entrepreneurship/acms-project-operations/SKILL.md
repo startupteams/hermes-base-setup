@@ -55,6 +55,30 @@ and current state in memory.
   transaction.
 - `deploy/validate-release.sh --stage app|full --strict-build
   --expected-rev <rev> [--feature-smoke <cmd>]`.
+- `deploy/smoke-test.sh [base-url]` — standalone operator smoke (not a
+  release gate): backend probes run IN-CONTAINER via `compose exec -T acms-app
+  python` + urllib with exact status asserts (health 200, version 200, unauth
+  agents 401, Work UI 303 via proxy) and exits 1 on any failure. Do NOT
+  reintroduce host-side `127.0.0.1:8000` probes — the app publishes no host
+  ports (nginx is the sole ingress by design). Live-proven 12/12 exit 0 after
+  the 137a008 deploy.
+- **Pipeline status (2026-09-26): fully proven.** Drill 3 = "Release ACCEPTED"
+  end-to-end (preflight → verified backup → maintenance → build → migrate →
+  ready 2s → 6/6 + 12/12 validation, exit 0), and the first REAL deploy of a
+  merged PR followed the same path (`137a008`, the smoke-test fix — ACCEPTED,
+  then the fixed `smoke-test.sh` PASSED 12/12 live). **Standing deploy cadence:
+  user message "PR N merged" → fetch new main tip → `bash deploy/release.sh
+  <tip-sha>` on CT122 → report ACCEPTED + smoke.** No manual hop unless the
+  on-box tree is somehow behind the transaction baseline (bootstrap-hop rule
+  applies only to first-ever tooling install).
+- **Tooling-self-replacement caveat:** when a target tip CHANGES
+  `deploy/release.sh` (or rollback/validate scripts), the running transaction
+  checks out the new tree mid-flight while bash still reads the old script
+  from disk — unproven territory. The 137a008 deploy was safe only because
+  release.sh itself was byte-identical in the target. After a tooling-changing
+  merge, run a same-tip drill first (re-release the accepted SHA through the
+  new script) before the next real feature deploy — the drill pattern from
+  2026-09-26 (drills 1–3).
 - Release state lives OUTSIDE git at `/opt/acms/releases/`: `current`,
   `previous`, `history.jsonl`, `releases/<id>.json`, `transaction.json`,
   `backups/<id>.dump`. Never put secrets in release metadata.

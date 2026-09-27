@@ -80,3 +80,36 @@ Before first real use: pg_dump to /tmp, check `PGDMP` magic + sha256, pipe
 through `pg_restore --list`, restore into `acms_drill_tmp`, count rows, drop
 temp DB, probe app via in-container python urllib. All without touching the
 live `acms` DB or stopping anything.
+
+## Drill 3 (23:24Z, tip 363cf3c post-PR-#8) — first clean ACCEPT, plus new lessons
+
+`release.sh 363cf3c…` ran end-to-end clean: preflight → verified backup →
+maintenance ON→OFF → build → migrate → ready in 2s → stage-1 6/6 → stage-2
+12/12 → **"Release ACCEPTED", exit 0**. Both PR-#8 fixes held live. Reached
+via manual bootstrap hop 332f54d→363cf3c (fixed tooling can't install
+itself). New lessons:
+
+1. **Compose-v2 names.** First hop stage died on `Error response from daemon:
+   No such container: acms-reverse-proxy` — names are `acms-<service>-1`
+   under project `acms`; bare `docker exec acms-app` can never work. Always
+   `docker compose exec <service>` (name-agnostic). It failed AFTER the
+   nginx.conf overlay was applied →
+2. **Mid-overlay failure sequencing.** A failed stage between "overlay
+   maintenance conf" and "restore normal conf" leaves the tracked file
+   dirty. Restore with `git checkout -- deploy/reverse-proxy/nginx.conf`
+   BEFORE retrying the overlay sequence. (Maintenance content surviving the
+   `git checkout --detach` is expected and fine.)
+3. **Verdict-reading trap.** `bash release.sh … 2>&1 | tee log | tail -60;
+   echo $?` prints `tail`'s exit code — drill 3's real verdict came from
+   `"${PIPESTATUS[0]}"`. Have scripts print an explicit final verdict line.
+4. **Standalone smoke-test.sh was unrunnable + non-gating** (PR #9): its
+   direct-backend checks curled `127.0.0.1:8000` from the VM host, but the
+   app publishes NO host ports (nginx sole ingress by design) → permanent
+   silent false-fail; and it counted FAILURES yet always exited 0. Fixed:
+   in-container probes via `compose exec -T acms-app python` + urllib with
+   exact status asserts (/health 200, /version 200, unauth agents 401 —
+   ground truth), Work UI unauth 303, `exit 1` on failure. Not a release
+   gate (validate-release.sh probes correctly — that's why ACCEPT stood).
+5. Ledger end-state after drill 3: `current=20260926T232355Z-363cf3c`,
+   `previous=20260926T232236Z-363cf3c` (the hop's record), no open
+   transaction, 4 verified backups retained.
