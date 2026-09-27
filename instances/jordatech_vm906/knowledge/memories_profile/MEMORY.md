@@ -6,14 +6,16 @@ ACMS: ~/work/acms-project-framework (.venv-acms). CT122 LIVE 85f3c92 v0.6.0 slic
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
-RDMA: RoCE 100G MTU1500 (no jumbo). PBS 147 @03:05. CX5 SR-IOV: VFs→109 A/B, 103/111 VF+PF; 95-97Gb/s.
+RDMA: RoCE 100G MTU1500. PBS 147 @03:05.
 §
-MARION: no home.arpa DNS (raw IPs); CT906 pinned .195; MIAM-00115 owns .115. Omen dual-boot on tailnet (Omarchy 100.69.169.125, Windows 100.125.115.96; via CT100 tailscale ssh; not a PVE guest; PVE auth = root@pam).
+MARION: no home.arpa DNS (raw IPs); Omen dual-boot tailnet via CT100 ts-ssh (PVE auth root@pam).
 §
-Jordan: grants broad server autonomy (break OK — document, fix, don't stop); live handover .md; questions before NEW plans then full autonomy; deliverable = single .md in work folder + Telegram upload.
+Jordan: broad server autonomy (break OK — document, fix); questions before NEW plans then full autonomy; deliverable = single .md + Telegram upload.
 §
 LLM Mgr: ~/work/llm-manager-project-framework; #5 closed; PRs #6-17 merged 09-27 (VM102 fix incl. collector, deploy tooling, migrations, AgentManager capture, active_deployments, healthz id, CD workflows). Staging VM120@.131 clean-room proven. Prod §21 validated (KeyError-.168 gone; VM102 GPU sampling live). Protected production env live. Open: runner install, LITELLM PW+MASTER KEY ROTATION (2x session DSN exposure), SPRINT refresh. qga wedge→qm reset; LLM_MANAGER_PG_HOST override.
 §
-FlashNext V3 prod on VM102 (09-24). PVE quirks: guest console automation impossible via API — deploy LXCs w/ ssh-key at create; 00135 has internet; LLDAP writes via HTTP :17170 GraphQL addUserToGroup only; MARION has NO home.arpa DNS — raw IPs.
+PVE cloudimg→VM: download-url needs checksum+alg+.img; content POST lacks import-from → qm importdisk via node SSH (paramiko+root pass); ssh-keys alone fail → cipassword+reboot. LLDAP :17170 GraphQL only.
 §
 LLM Manager recovery DUAL trigger: desired_service_state=MAINTENANCE gates only HTTP-probe restarts; desired_power_state=RUNNING + observed VM stop fires outage_detected→vm_start regardless. GPU handoffs need BOTH power=STOPPED + service=MAINTENANCE, restore both after.
+§
+PDU Mgr repo: ~/work/pdu-marion-ia-usa-project-framework; capture+CI/CD DONE 09-27 (issues 1+6 closed, PRs 2-9 merged). Staging VM156@.156 mock; prod VM154 untouched. Next: runner ADR + prod env + 1st supervised deploy; KVM labels live=JetKVM+KYY.

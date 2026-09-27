@@ -313,6 +313,16 @@ with all flags, Restart=on-failure, TimeoutStartSec generous for model load), th
   returns `{data:{result:[...]}}` — iterate `data['result']`, NOT `data`. Verified vLLM
   VM IP map 2026-09-11: VM103→10.0.20.161, VM401→.162, VM109→.163, VM111→.164, VM149→.165.
 
+## Creating a VM from a vendor cloud image (Debian/Ubuntu genericcloud)
+
+Recipe in `references/pve-cloud-image-vm-creation.md` (proven 2026-09-27, VM156).
+Headlines: `download-url` rejects `checksum: "auto"` (needs the real sha256 + explicit
+`checksum-algorithm`) and rejects `.qcow2` (rename `.img`); the storage-content import API
+does NOT support `import-from` on PVE 9.2 → use node SSH (paramiko + `~/.miam_root_pass`;
+BatchMode ssh lacks the key) + `qm importdisk`; **cloud-init `--sshkeys` alone failed on
+Debian 12 genericcloud — set `--cipassword` too and stop+start** (regenerates the CI ISO)
+before debugging further.
+
 ## ConnectX-5 / mlx5 SR-IOV VF passthrough for guest RDMA (proven 2026-09-13, MIAM ring)
 
 Full session recipe: `references/cx5-sriov-guest-rdma.md`. Ready runners: `scripts/cx5_miam_ssh.py` (node shell) + `scripts/cx5_vm_exec.py` (guest exec). Summary of the working pattern:
