@@ -63,12 +63,27 @@ syntax+logic only; live drills happen on CT122 after merge + authorization.
 - Issue trackers may be disabled on some repos — re-enable via settings with the jordatech gh token (`repo` scope) if an issue must be filed.
 - **Push protection scans ancestor commits.** If a push is rejected for a secret, rebuilding only the tip is not enough — rebuild branch history from main and re-push.
 
-## PR numbering state (as of 2026-09-26)
+## PR numbering state (check live; snapshot below is stale-by-design)
 
-PR #1–#4 merged (scaffold, async stack, LLDAP fix, work orchestration).
-PR #5 OPEN (`ops/ACMS-safe-release-rollback`): safe release transaction +
-automated rollback — awaiting human review. Do not assume; run
-`gh pr list` to confirm current state.
+Always confirm with `gh pr list` before assuming. Historical anchor points:
+PR #1–#4 merged (scaffold, async stack, LLDAP fix, work orchestration);
+#5–#8 release tooling + fixes; #9 smoke-test fix; #10 Agent Detail (v0.5.0);
+#11 combined slice 3+4 (v0.6.0, heartbeat/reconciliation/keys/bridge);
+#12 handoff doc. ADR-0009 and ADR-0010 are **Accepted** as of 2026-09-26/27.
+
+## Self-merge override protocol (session-scoped, 2026-09-26)
+
+Jordan granted an explicit session-scoped override ("merge your own features
+as you need them merged... This is an override") during the combined slice 3+4
+co-work session, then extended it: "work fully autonomously... document any
+questions in the handoff." Protocol for overrides:
+
+- Overrides are **session-scoped** — do not carry them into later sessions
+  unless restated. Default rule (no self-merge) reasserts next session.
+- Log the grant verbatim-date in agents.md the moment it is given.
+- Even under override: still run the full validation battery, never merge
+  broken/unreviewed-by-CI code, still never touch others' PRs, and still
+  deploy only through release.sh with the pre-authorized rollback rule.
 
 ## Pitfalls
 

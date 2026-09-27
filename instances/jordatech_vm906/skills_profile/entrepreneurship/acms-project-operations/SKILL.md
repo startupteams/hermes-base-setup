@@ -162,5 +162,30 @@ known anchor lines, then re-verify with git diff.
 
 - `references/live-drill-2026-09-26.md` — bug-by-bug drill breakdown, exact
   commands, recovery timeline.
-- Repo docs: `deploy/README.md` (operator runbook), ADR-0009 (safe release
-  transaction), `SPRINT.md` (current slices), handoffs under `docs/handoffs/`.
+- `references/hermes-harness-live-tests-2026-09.md` — Hermes 0.17.0 live
+  control-mapping results (pause/resume unsupported, steer/interrupt verified),
+  scratch-profile setup recipe, bridge-to-ACMS wiring.
+- Repo docs: `deploy/README.md` (operator runbook), ADR-0009 + ADR-0010 (both
+  Accepted 2026-09-26/27), `docs/HARNESS_CONTROL_MAPPING.md`, `SPRINT.md`
+  (current slices), handoffs under `docs/handoffs/`.
+
+## Combined slice 3+4 state (deployed 2026-09-27, v0.6.0 @ 85f3c92)
+
+- **ADR-0009 Accepted** (amended: live evidence + explicit deployment-authority
+  policy); **ADR-0010 Accepted** — heartbeat 60s / STALE 300s / reconcile
+  3600s / fleet 86400s / alignment grace 120s / context warnings 70-85-95,
+  all config-backed via `ACMS_*` settings (settings.py gained the fields).
+- Human-readable keys `ACMS-WORK-000001` / `ACMS-ASG-000001` via the
+  `acms_key_counters` transactional counter table — never row counts, never
+  reused; allocated in `create_work_item` / `assign_primary`.
+- State dimensions stay separate (plan §5): connectivity is ACMS-derived
+  (UNKNOWN/HEALTHY/STALE/UNREACHABLE from contact recency), `agent_running`
+  is harness-reported tri-state — the UI shows both as independent facts.
+- Heartbeat = complete snapshot (`acms-heartbeat-v1`), unknown fields rejected
+  by the Pydantic model; semantic events only on material change (never
+  per-heartbeat spam); event sequences allocated via the same counter table.
+- Time-dependent tests: inject `now_fn` into TelemetryScheduler; watch for
+  tz-naive vs tz-aware datetimes when mixing `datetime.now(timezone.utc)` with
+  DB-loaded values (replace(tzinfo=utc) guard in the stale delta).
+- **Next steps logged in agents.md:** wire `ACMS_BRIDGE_TARGETS_JSON` into
+  CT122 env + dispatch/control buttons in the UI; slices 5–9 per master plan.
