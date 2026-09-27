@@ -63,6 +63,16 @@ cd "$REPO_DIR"
 
   changes_detected=0
 
+  # Pre-commit secret scan (REV4 §10A): refuse to commit/push secret material
+  # Patterns: private keys, tokens/secrets by filename, sk- API keys, PATs, DSNs with passwords
+  scan_hits="$(git diff --name-only; git ls-files --others --exclude-standard profiles/ skills/ memories/ 2>/dev/null | sort -u | \
+    xargs -r grep -lI -E '(-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[bap]-[A-Za-z0-9-]+|postgres(ql)?://[^:@/ ]+:[^@/ ]+@)' 2>/dev/null || true)"
+  if [ -n "$scan_hits" ]; then
+    log "SECRET SCAN FAILED — refusing to commit. Files: $scan_hits"
+    fail "secret scan failed: potential secrets in tracked-to-be content (never push secret material merely because it is not ignored, §10A)"
+  fi
+  log "Secret scan clean"
+
   # Check and track changes in profiles/ (original memory sync behavior)
   if ! git diff --quiet profiles/ || ! git diff --cached --quiet profiles/ || [ -n "$(git ls-files --others --exclude-standard profiles/)" ]; then
     git add profiles/ >> "$LOG_FILE" 2>&1 || fail "git add profiles/ failed"
