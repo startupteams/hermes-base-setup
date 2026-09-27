@@ -11,6 +11,8 @@
 !init_employee.py
 
 # 3. Whitelist core directories
+!profiles/
+!profiles/**
 !memories/
 !memories/**
 !skills/
@@ -31,6 +33,15 @@
 *.sqlite3
 *.lock
 *.log
+*token*
+*secret*
+*.ssh/
+authorized_keys*
+id_rsa*
+id_ed25519*
+*.p12
+*.pfx
+credentials*
 __pycache__/
 *.py[cod]
 .DS_Store
