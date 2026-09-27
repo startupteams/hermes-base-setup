@@ -66,6 +66,27 @@ These make a passing system report failure:
 - Write probes against the service's ACTUAL reachability. A smoke script that curls `127.0.0.1:8000` from the VM host silently fails forever once the service stops publishing host ports — reverse-proxy-as-sole-ingress hardening produces exactly this. With no host ports, probe in-container: `docker compose exec -T <svc> python -c "import urllib.request, …"` (many images ship no curl; assert exact status codes, e.g. unauth API = 401).
 - When hardening changes topology (published ports removed, allowlists added, mount types changed), audit every existing check script in the same change — stale probes become permanent false-fails that train operators to ignore the whole suite.
 
+## 8. Deploy-transaction healthchecks: false-failure classes (llm-manager staging, 2026-09-27)
+
+Three smoke/healthcheck bugs in a row produced the same symptom — a correct deploy auto-rollback on false evidence:
+
+- **Restart-backoff false-negative**: the transaction restarts units then healthchecks immediately; a unit still in `Restart=on-failure` backoff (RestartSec=5–15) reads "not active". Healthcheck needs a bounded wait per unit: `for _ in $(seq 1 10); do systemctl is-active --quiet $u && return 0; sleep 3; done`.
+- **Route-inventory 404**: a 404 on an optional API route (`/api/benchmarks` absent in older releases) is a release difference, not a deploy failure — tolerate 404 in the route-alive check.
+- **Auth-gate responses are PASSes**: a gated endpoint answering its auth error (`invalid or missing API key` on `/v1/models`) proves the route is alive with its gate enforced — don't fail on it; staging environments legitimately have no keys seeded.
+- **Post-rollback identity confusion**: when the candidate fails smoke and the transaction auto-rolls back, the post-rollback healthcheck correctly reports the PREVIOUS release's manifest. Read the log sequence (smoke FAILED → rollback started → healthcheck on old release) before diagnosing.
+- The rollback chain itself worked correctly every time — the bug was always in the acceptance criteria, never in the transaction mechanics.
+
+## 9. Scripts that silently operate on empty inputs
+
+A runner/discovery script that finds ZERO input items must hard-fail, not succeed emptily. Real case (2026-09-27): a DB migration runner computed its migrations dir as `os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")` while the script itself lived inside `db/migrations/` — resolving to `db/migrations/migrations`. Every downstream consumer (`apply`, `status`, `verify`) then exited 0 over an empty set: `apply` printed nothing, `verify` printed "verified 0 applied migrations". The silent zero was only caught when a live test tried to SELECT a table the scratch migration should have created.
+
+Rules:
+
+- Self-referencing directory = `os.path.dirname(os.path.abspath(__file__))` itself — appending `/<dirname>/` again double-nests.
+- `apply`-style commands must print EVERY action taken; an `apply` run with no output lines is suspicious by default.
+- Add an explicit guard: `items = discover(); if not items: die("no <inputs> found in <dir>")` for anything that later writes state.
+- Same class: "verified 0 X", "applied 0 migrations", "0 files processed" on a supposedly-populated tree = treat as failure, not success.
+
 ## References
 
 - `references/acms-release-drill-evidence.md` — session evidence: exact error strings, drill timeline, recovery commands, ACMS release-record layout.
