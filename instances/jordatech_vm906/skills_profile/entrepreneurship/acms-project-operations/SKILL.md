@@ -61,16 +61,30 @@ and current state in memory.
   agents 401, Work UI 303 via proxy) and exits 1 on any failure. Do NOT
   reintroduce host-side `127.0.0.1:8000` probes — the app publishes no host
   ports (nginx is the sole ingress by design). Live-proven 12/12 exit 0 after
-  the 137a008 deploy.
-- **Pipeline status (2026-09-26): fully proven.** Drill 3 = "Release ACCEPTED"
+  the 137a008 deploy. **Also: never ship a check-script that counts failures
+  but always exits 0 — smoke-test.sh had exactly that bug (FAILURES counted,
+  no exit 1); scripts that gate anything must propagate failure to the exit
+  code, and `exit 0` printed after a pipeline (`cmd | tail`) is `tail`'s
+  status, not the script's — use `${PIPESTATUS[0]}`.**
+- **Pipeline status (2026-09-26): fully routine.** Drill 3 = "Release ACCEPTED"
   end-to-end (preflight → verified backup → maintenance → build → migrate →
-  ready 2s → 6/6 + 12/12 validation, exit 0), and the first REAL deploy of a
-  merged PR followed the same path (`137a008`, the smoke-test fix — ACCEPTED,
-  then the fixed `smoke-test.sh` PASSED 12/12 live). **Standing deploy cadence:
-  user message "PR N merged" → fetch new main tip → `bash deploy/release.sh
-  <tip-sha>` on CT122 → report ACCEPTED + smoke.** No manual hop unless the
-  on-box tree is somehow behind the transaction baseline (bootstrap-hop rule
-  applies only to first-ever tooling install).
+  ready 2s → 6/6 + 12/12 validation, exit 0); routine deploys #137a008 and
+  #9545123 (v0.5.0) each ACCEPTED with zero intervention, smoke 12/12.
+  **Standing deploy cadence: user message "PR N merged" → fetch new main tip →
+  `bash deploy/release.sh <tip-sha>` on CT122 → report ACCEPTED + smoke.** No
+  manual hop unless the on-box tree is somehow behind the transaction baseline
+  (bootstrap-hop rule applies only to first-ever tooling install).
+- **Slice-2 view delivered (9545123, v0.5.0):** Agent Detail page at
+  `/ui/agents/{agent_id}` — read-only; identity + capability manifest
+  (declared vs not-declared flags rendered honestly), assignment/execution-
+  task/handoff history, background-routine inventory (REQ-014) with explicit
+  "ACMS does not schedule" note, recorded-only delivery notice (shared
+  `DELIVERY_STATE` constant from work_routes), and an explicit
+  heartbeat-pending note (slice 3) — never fabricate liveness. Reuse
+  `_base_context` + shared constants in new UI routes (a locally re-declared
+  delivery string diverged from the Work UI wording and a version-empty footer
+  appeared; single source of truth fixes both). Home "not yet implemented"
+  list must track what the backend actually maintains.
 - **Tooling-self-replacement caveat:** when a target tip CHANGES
   `deploy/release.sh` (or rollback/validate scripts), the running transaction
   checks out the new tree mid-flight while bash still reads the old script
@@ -88,6 +102,14 @@ and current state in memory.
 
 - Git checkout is at `/opt/acms/repo` (NOT `/opt/acms`); `.env` at
   `/opt/acms/.env` (0600, key names only — never echo values).
+- **Compose v2 container names are `acms-<service>-1`** — bare
+  `docker exec acms-app` FAILS ("No such container"). Always
+  `docker compose -f deploy/compose.yaml --env-file /opt/acms/.env exec -T
+  <service>` (service-name agnostic). If a manual hop stage dies on a bare
+  name AFTER copying the maintenance conf, the host
+  `deploy/reverse-proxy/nginx.conf` is already switched —
+  `git checkout -- deploy/reverse-proxy/nginx.conf` BEFORE retrying, or the
+  retry double-applies maintenance content.
 - No `pg_dump`/`psql` on the CT host — run inside the postgres container:
   `docker compose -f deploy/compose.yaml --env-file /opt/acms/.env exec -T
   postgres pg_dump -U acms -Fc acms`.

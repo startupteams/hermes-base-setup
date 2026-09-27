@@ -91,15 +91,25 @@ Standard layout and invariants (no published DB ports; app port compose-internal
 
 Deployment plans, PR bodies, handoff docs, runbooks, memory entries, and any other artifact written for this class of task must **never contain** passwords, bearer/API tokens, private keys, LDAP bind secrets, or session secrets — not even "temporary" ones. Reference secrets by **name and location only** (e.g. `SESSION_SECRET` lives in `/opt/acms/.env`, 0600) or by placeholder (`<from .env>`). Same rule applies to terminal output pasted into documents: redact before writing. The fail-closed design means every secret needed at runtime is already in the env-file — a plan that needs an inline secret to be executable is a plan with a design smell.
 
-## Post-merge production sync (proven 2026-09-26, ACMS CT122)
+## Post-merge production sync (superseded by the release pipeline — ACMS, 2026-09-26)
 
-After the human merges the PR, sync prod to the merged commit — a checkout alone does NOT update the running service:
+The manual sync below (git pull + rebuild + exec-verify) was the pre-tooling
+procedure and still applies to projects WITHOUT a release transaction. On ACMS
+it is **superseded**: the standard path after every human merge is
+`bash deploy/release.sh <new-main-sha>` on the prod box (verified backup →
+maintenance window → SHA-tagged build → migrate → two-stage validation →
+`Release ACCEPTED`), then the standalone smoke test. Post-drill rule for that
+path:
 
-1. On the prod box: `git checkout -- <locally-modified files>` first (hotfixes scp'd during the original deploy block `git pull`); verify merged main actually contains those hotfixes before discarding.
-2. `git pull --ff-only origin main` to the merge commit.
-3. **Rebuild the app image and recreate the container** (`docker compose -f deploy/compose.yaml --env-file /opt/acms/.env build <app> && ... up -d <app>`). A `git checkout` changes nothing in the running container.
-4. Verify from INSIDE the container (`docker exec <app> python -c "import <pkg>; print(__version__)"` + `/health`) — the app port is compose-internal by design, so curl from the CT host fails with connection-refused and that is NOT an outage.
-5. **Compose file shadowing pitfall:** a root-level dev `compose.yaml` (postgres-only) shadows `deploy/compose.yaml` — `docker compose ... <service>` from the repo root says `no such service: <app>`. Always pass `-f deploy/compose.yaml` explicitly (the deploy runbook scripts already do).
+- A **tooling-changing merge** (one that edits `release.sh`/`rollback.sh`/
+  `validate-release.sh`) must be followed by a same-tip drill through the new
+  script BEFORE the next real feature deploy — the running transaction checks
+  out the new tree mid-flight while bash still reads the old script from disk.
+- Keep the in-container verification rule (no host ports on the app; curl from
+  the CT host fails with connection-refused and that is NOT an outage).
+- Compose file shadowing pitfall still applies: always `-f deploy/compose.yaml`
+  explicitly; compose v2 container names are `acms-<service>-1` (bare
+  `docker exec acms-app` fails — use `compose exec <service>`).
 
 ## Repo notes
 
