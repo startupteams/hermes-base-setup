@@ -44,6 +44,7 @@ the text is delivered.
 
 ## Pitfalls
 
+- **"Send this over Telegram" ≠ find a send tool.** There is no dedicated send-message tool for most platforms — tool_search for 'telegram send document' returns only third-party MCP noise (Zapier Slack/Gmail/etc.). Burning 4+ round-trips hunting for one is the classic failure (2026-09-27). The mechanism IS the MEDIA: tag in your final reply. To confirm the destination is live, read `~/.hermes/profiles/<profile>/channel_directory.json` — `platforms.telegram[]` carries `{id, name, type, thread_id}` for each known chat (the home DM shows as type `dm`); use it to verify the target exists instead of guessing chat IDs.
 - **Prose mentions don't deliver.** The tag must appear as a real `MEDIA:`
   token in the final reply — writing "the file is at /path/file.md" does
   nothing. Conversely, never write `MEDIA:` with a fake path in prose

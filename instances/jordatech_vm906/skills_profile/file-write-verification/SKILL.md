@@ -50,6 +50,20 @@ del lines[179:181]  # drop duplicated fragment
 p.write_text("\n".join(lines) + "\n")
 ```
 
+## sed -i with quoted replacements silently mangles quoting
+
+Multi-site `sed -i 's|…\$(dirname "\$0")…|…|'` edits on a deploy script produced
+correct-looking but broken quoting on 2 of 3 sites (a closing quote lost inside an
+`if "$(dirname "$0")/healthcheck.sh $([ …` construct), while the third site looked
+right — caught only by printing the affected lines + `bash -n` (2026-09-27). sed's
+own exit code and the shell's silence are not evidence.
+
+- For shell scripts, prefer the patch tool (returns a reviewable unified diff) or a
+  python string-replace with exact-match assertions over `sed -i` when the pattern
+  contains quotes/brackets.
+- If sed is used anyway: immediately `sed -n '<affected>,<affected>p'` + `bash -n` —
+  never proceed on the sed exit code alone.
+
 ## Red flags in tool results
 
 - Tool result text containing strings you never wrote (canary/injection
