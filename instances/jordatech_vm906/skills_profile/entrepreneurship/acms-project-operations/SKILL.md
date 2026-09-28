@@ -216,3 +216,75 @@ known anchor lines, then re-verify with git diff.
 - Worker LLM path: profile provider `llm-manager` → `http://10.0.20.108:8080/v1` (nginx plain-LAN surface on VM114 — self-signed TLS on :443 breaks OpenAI clients; bearer key is the auth layer on the private network). LiteLLM virtual key `agent_key_acms_worker_001` (0600 on VM114). Profile model caps: `model.context_length: 70000`, `max_tokens: 8192`, `tools.tool_search.enabled: "on"` (same playbook as the 2026-09-20 qwen3.8 70K incident — otherwise Hermes requests context-minus-prompt output tokens and litellm 400s ContextWindowExceeded).
 - nginx backups must NEVER live in `sites-enabled/` (duplicate default_server breaks reload) — `/etc/nginx/backups/`. The VM114 sites-enabled file has DIVERGED from sites-available (enabled = live v2 TLS config).
 - Worker bootstrap runs via node qga (`qm guest exec 124 -- bash -c ...`): stage scripts as base64 files, run under nohup for long installs (qga channel wedges on long execs).
+
+## Worker Hermes state sync (installed 2026-09-28, REV4 §10A)
+
+- Branch `agent/22ac1b19` on startupteams/hermes-base-setup (child of
+  feat/rev4-hermes-state-backup `df75cc8` + hygiene commit: the rev4 branch
+  whitelist `!profiles/**` WOULD have committed the worker's `config.yaml`
+  which carries the bridge API key — profiles/.gitignore now excludes
+  config.yaml/.env/db/bin/cache/locks per profile. Never trust the rev4
+  whitelist alone for worker profiles).
+- Deploy key (repo-scoped, read-write, id 164639272) + mirror repo at
+  `/home/hermes/hermes-state-backup`; script `/usr/local/bin/hermes-state-sync`
+  (root-owned, runs as hermes); systemd `hermes-state-sync.timer` (hourly,
+  Persistent, RandomizedDelaySec=300).
+- Sync behavior: mirror sessions/memories/skills/state (+small workspace);
+  **`request_dump_*` files are explicitly deleted from the mirror** — they
+  contain masked bearer keys (`sk-...QPjA` form) + full prompts, and the
+  mask slips past the secret regex. Fail-closed scan patterns include
+  `LLM_MANAGER_AGENT_KEY=`/`API_SERVER_KEY=`; probe file → exit 1, nothing
+  committed (verified live).
+- Post-sync verification is MANDATORY: grep the pushed blobs for auth values
+  (the scan runs pre-commit, but the leak found here was only caught by
+  re-reading the pushed files). Also fetch `git pull --rebase` (not
+  `--rebase=local`, unsupported on this git), and set repo-local git identity
+  or commits fail "Author identity unknown".
+- ARM records `last_state_commit_sha`/`state_sync_health` via
+  `POST :8300/api/v1/agent-runtimes/{id}/state-sync` (health vocab: PENDING |
+  SYNCING | VERIFIED | STALE | FAILED).
+
+## ACMS release via SSH (simpler than qga — CT122 has sshd)
+
+- `ssh root@10.0.20.122` works (unlike VM114/VM124 which are qga-only).
+  Loop: `cd /opt/acms/repo && git fetch origin main` →
+  `nohup bash deploy/release.sh <main-tip-sha> > /tmp/release-<sha>.log 2>&1 &`
+  → poll `tail` until `Release ACCEPTED: <id> (acms-app:<sha>, alembic <rev>)`
+  → `bash deploy/smoke-test.sh https://10.0.20.122` (exit 0) →
+  `curl -sk https://10.0.20.122/version` shows the new sha.
+- Keep prod == origin/main: after EVERY docs-only merge, run the release too
+  (cheap, keeps /version identity checks meaningful).
+- **CI note:** ACMS repo has NO GitHub Actions workflows / required checks —
+  green comes from local pytest only. Run the full suite
+  (`.venv-acms/bin/python -m pytest tests/ -q --ignore=tests/test_postgres_integration.py`)
+  before merging. The pgserver integration test fails on this workstation even
+  on clean main (env gap, not a regression).
+- conftest must register EVERY models module (work/telemetry/SM/memory) or
+  create_all misses tables in unit tests — missing-table errors
+  (`acms_key_counters`, `context_packages`) are both this bug.
+- ACMS has no PDU credentials; power flows LLM Manager → Server Manager → PDU
+  (`/api/v1/pdu/*` on VM114:8300; dry-run plans; actuation env-gated).
+
+## Runtime lifecycle API + Memory/Session Offload (both live 2026-09-28)
+
+- Runtime (Phase 3): `GET /api/v1/fleet/agents/{id}/runtime` +
+  Administrator `POST .../runtime/{start|stop|restart|reconcile}` — mirrors
+  ARM desired/actual/recovery state, executes desired-state + reconcile NOW
+  via Server Manager. Destroy not exposed. Stop with an ACTIVE assignment
+  emits `RUNTIME_STOPPED_WITH_ACTIVE_WORK`; work state preserved. UI posts are
+  Administrator-only (303 back to agent page; observer 403). Distinct from A2A
+  interrupt/cancel/steer.
+- Memory offload (Phase 8, migration 0006): `/api/v1/memory/*` —
+  execution_sessions / context_packages / session_checkpoints. Rotation
+  advisory bands at 50/70/85% context (MONITOR/CHECKPOINT_RECOMMENDED/
+  ROTATE_RECOMMENDED); invalid context telemetry → UNKNOWN, never fabricated;
+  rotation endpoint closes session 1 and builds a COMPACT reconstructed
+  package (work facts + live assignment + latest checkpoint refs — never
+  transcripts); completeness validator checks 10 required fields. The
+  multi-session proof ran LIVE on prod: session 1 closed → session 2 open →
+  work still active.
+- **⚠️ OPEN — do not repeat:** a `work_budgets` table was added to migration
+  `0006_memory_session_offload.py` LOCALLY after prod already applied 0006.
+  That edit is uncommitted and must be REVERTED; budgets belong in a NEW
+  `0007_work_budgets` migration. Never edit an already-applied migration in
+  place (fresh-install drift). Budget service/API/tests were not written.
