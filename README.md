@@ -4,6 +4,103 @@ A comprehensive Standard Operating Procedure (SOP) for deploying and configuring
 
 ---
 
+## Automated Deployment (Recommended)
+
+**This is the actual deployment step you need to follow.**
+
+The deployment orchestrator script automates the container creation and Hermes Agent setup described in this SOP. **You do not need to manually perform Steps 2–8 below when using the script.**
+
+The rest of this document intentionally remains as the **manual/reference explanation** of what the automation is doing. Use it when you want to understand, troubleshoot, or manually reproduce each deployment step.
+
+### What the automation does
+
+The script automatically:
+
+1. Clones the specified Proxmox LXC template.
+2. Starts the new container and installs the required system dependencies and Python 3.11.
+3. Clones the Hermes repository into `/opt/hermes` and configures Git.
+4. Creates the Python virtual environment and installs dependencies.
+5. Configures the OpenRouter and Telegram environment variables and LLM configuration.
+6. Initializes the employee profile and Git branch.
+7. Creates the runtime profile symlink.
+8. Installs and enables the employee-specific systemd service.
+9. Configures the 15-minute memory synchronization cron job.
+
+### Before running the script
+
+Make sure you have:
+
+- Proxmox VE access with permission to create and manage LXC containers.
+- The **source/template LXC VMID** to clone.
+- A new, unused **VMID** for the employee container.
+- The employee's name and role.
+- A valid Hermes profile template key such as `admin`, `fullstack`, `aiml`, `sales`, etc.
+- The employee's Telegram numeric chat/user ID.
+- A GitHub username and commit email.
+- A GitHub Personal Access Token (PAT) with the required repository access.
+- An OpenRouter API key.
+- A Telegram bot token.
+
+The Telegram bot and chat ID still need to be obtained through Telegram beforehand. See [Step 1](#1-obtain-telegram-credentials) below if you need to obtain them.
+
+### Run the deployment script
+
+Run the automation script **on the Proxmox host** with the required arguments:
+
+```bash
+python3 hermes_deploy_master_script.py \\
+  --vmid <NEW_VMID> \\
+  --template-vmid <TEMPLATE_VMID> \\
+  --name <EMPLOYEE_NAME> \\
+  --role "<ROLE>" \\
+  --template <TEMPLATE_KEY> \\
+  --chat-id <TELEGRAM_CHAT_ID> \\
+  --github-user <GITHUB_USERNAME> \\
+  --github-email <GITHUB_EMAIL>
+```
+
+For example:
+
+```bash
+python3 hermes_deploy_master_script.py \\
+  --vmid 150 \\
+  --template-vmid 999 \\
+  --name john \\
+  --role "AI/ML Intern" \\
+  --template aiml \\
+  --chat-id 0123456789 \\
+  --github-user johndoe \\
+  --github-email john@example.com
+```
+
+The script will securely prompt for the following credentials instead of requiring them as command-line arguments:
+
+```text
+Enter Telegram Bot Token:
+Enter OpenRouter API Key:
+Enter GitHub Personal Access Token (PAT):
+```
+
+**Do not put these secrets directly into the command-line arguments or commit them to Git.**
+
+### After the script finishes
+
+The script prints the commands needed to verify the deployment. You can check the employee's service with:
+
+```bash
+pct exec <NEW_VMID> -- systemctl status hermes-agent@<EMPLOYEE_NAME>
+```
+
+and stream its logs with:
+
+```bash
+pct exec <NEW_VMID> -- journalctl -u hermes-agent@<EMPLOYEE_NAME> -f
+```
+
+> **Important:** The automated script is the normal deployment path. The manual deployment procedure below is retained so that administrators can understand exactly what the script is doing and can troubleshoot or reproduce individual steps when necessary.
+
+---
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
