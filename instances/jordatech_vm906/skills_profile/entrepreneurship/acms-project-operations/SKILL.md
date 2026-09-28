@@ -283,8 +283,4 @@ known anchor lines, then re-verify with git diff.
   transcripts); completeness validator checks 10 required fields. The
   multi-session proof ran LIVE on prod: session 1 closed → session 2 open →
   work still active.
-- **⚠️ OPEN — do not repeat:** a `work_budgets` table was added to migration
-  `0006_memory_session_offload.py` LOCALLY after prod already applied 0006.
-  That edit is uncommitted and must be REVERTED; budgets belong in a NEW
-  `0007_work_budgets` migration. Never edit an already-applied migration in
-  place (fresh-install drift). Budget service/API/tests were not written.
+- **⚠️ RESOLVED (2026-09-28):** the 0006 `work_budgets` in-place edit was REVERTED; budgets shipped properly as `0007_work_budgets` (PR #25, v0.9.0). Prod alembic is now **0008** (v0.11.0, `a67bef9`): economics tables (`pr_outcomes`/`requirement_links`/`cost_attribution`) + attention feed (`GET /api/v1/attention`, derived from audit log). PG lesson learned live: **boolean server_default must be `sa.false()`** — `sa.text("0")` passes SQLite but DatatypeMismatchErrors on PostgreSQL (only the PG migration test catches it; keep `tests/test_budget_migration.py`-style chain tests for every migration).

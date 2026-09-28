@@ -2,17 +2,17 @@ Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Econ
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-ACMS: ~/work/acms-project-framework (.venv-acms). CT122 LIVE e1cd84ed (alembic 0005, Rev4 ServerManagerClient live). Compose acms-<svc>-1; fetch before checkout; manual re-raise after power-cycle. Worker VM124 @.203 bridge :8402.
+ACMS: ~/work/acms-project-framework (.venv-acms). CT122 LIVE a67bef9 (v0.11.0, alembic 0008). Budgets(0007)+economics+attention live. Worker VM124 @.203. PG booleans: server_default=sa.false().
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
 RDMA: RoCE 100G MTU1500. PBS 147 @03:05.
 §
-MARION: no home.arpa DNS (raw IPs); Omen dual-boot tailnet via CT100 ts-ssh (PVE auth root@pam).
+MARION: no home.arpa DNS (raw IPs); Omen dual-boot tailnet via CT100 ts-ssh (PVE auth root@pam). qga exec needs JSON body (urlencoded→500).
 §
 Jordan: broad server autonomy (break OK — document, fix); questions before NEW plans then full autonomy; deliverable = single .md + Telegram upload.
 §
-LLM Mgr + Server Manager: ~/work/llm-manager-project-framework; PRs #6-44 merged 09-27. REV4 SHIPPED: server_manager/ (ARM + machine API v1.0.0) LIVE on VM114:8300 (e33093ae, schema 001, 11 releases). ROTATION DONE (master key + DB pw). LXC-130 runner (llm-manager-deploy-runner) does staging+prod CD. qga wedge→qm reset; LLM_MANAGER_PG_HOST override. Recovery dual-trigger: GPU handoffs need power=STOPPED + service=MAINTENANCE both. Next: full-table ORM (TDR-0008), ARM reconciler.
+LLM Mgr: ~/work/llm-manager-project-framework; PRs to #49. ORM slices 1-3 done; staging 094b067 live; VM114 prod BLOCKED (qga wedge — needs SSH key or reset window; restart server-manager-api after deploy). Stale ARM rows = failed attempts of acms-22ec3237 (supersede queued). Worker-bridge key rotation runbook: ~/flight-work-20260928-rev2/. Recovery dual-trigger: GPU handoffs need power=STOPPED + service=MAINTENANCE both.
 §
 PVE: API token can't start/stop guests (501) → root SSH nodes (~/.miam_root_pass). onboot=1 guests may not auto-start after node power events — verify. Power-cut latency ~25s+. PDU 151:9=miam-00119; 152:3=miam-00135 (live node). cloudimg→VM via qm importdisk node-SSH; cipassword+reboot. LLDAP :17170 GraphQL.
 §
