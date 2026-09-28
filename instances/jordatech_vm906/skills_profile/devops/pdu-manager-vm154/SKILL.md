@@ -146,9 +146,15 @@ Idempotency persists across restarts (/var/lib/pdu-control/idempotency.json).
   on big single posts).
 - LLDAP GraphQL: `user(userId:)` not `user(id:)`; introspect mutations.
 
-## Live power-cycle test protocol (learned 2026-09-27, authorized 00119 test)
+## Asset-addressed API (REV4 §10C Phases 2-6, LIVE since 2026-09-27)
 
-The authorized MIAM-00119 test validated the full actuation path through VM156 and produced durable wiring knowledge:
+- **Asset mapping = Git-managed labels.** Each outlet's label carries `MIAM-##### - <description>`; the FIRST `MIAM-#####` token is the outlet's asset_id (⚠️ labels use 5-digit numbers — a `MIAM-\d{3}` regex silently matches a 3-digit prefix of `MIAM-00167` and creates phantom duplicates). `build_asset_index()` in `app/api_assets.py` derives the mapping and raises `ASSET_MAPPING_AMBIGUOUS` (500) if one asset_id appears on two outlets.
+- **Raw-route identity guard (Phase 3):** raw outlet actions accept `expected_asset_id` in the JSON body; mismatch → `409 TARGET_IDENTITY_MISMATCH` BEFORE any driver dispatch. Live-verified: POST with expected=MIAM-00119 against PDU asset MIAM-00151 was refused pre-dispatch. Machine callers SHOULD send it; the wrong-target incident is why this exists.
+- **Dry-run plans (Phase 4):** `POST /api/v1/action-plans` returns `actuated: false` + target resolution + current state + protected policy + caller authz + required acks. Use it to pre-verify identity before a real submit. `GET /capabilities` + `GET /version` expose API version, backend mode, asset count, supported actions, rate limits.
+- **Correlation metadata (Phase 6):** every action accepts `correlation_id` / `source_service` / `upstream_operation_id`; they land in both the human audit line and a structured JSONL audit record (`action_submitted` event). Feed them from ACMS Work / Server Manager ops.
+- **Reusable client (Phase 8):** `pdu_manager_client.py` in the repo root — TLS-verify required by default (verify=False is an explicit opt-out only), NO auto-minted idempotency keys after timeout, structured exceptions (`PduIdentityMismatch`, `PduProtectedPolicy`, `PduAuth`), correlation passthrough, `wait_for_job`. `tests/test_pdu_client.py` covers the contract.
+- **Import-time backend selection:** `app_runtime.py` reads `PDU_BACKEND` at import. Test files MUST set `PDU_BACKEND=mock` in conftest BEFORE importing app modules (a per-test monkeypatch is too late if another test imported app first) — this is the REQ-010 structural "CI never actuates hardware" guarantee.
+## Live power-cycle test protocol (learned 2026-09-27, authorized 00119 test)
 
 - **Verified mapping:** `151:9 = MIAM-00119` (PVE node, Dell 7010). OFF dropped the node (~10s), ON restored it, PDU REBOOT (native Cycle Load) cleanly rebooted it. All three legs audit-logged.
 - **⚠️ Power-cut latency is NOT instant:** an outlet can read OFF at the PDU relay for ~25s+ before the attached node actually loses power (capacitors/PSU holdup). A fast ping loop showing "still up" right after OFF does NOT prove a wiring mismatch — wait 30s+ minimum before concluding anything.

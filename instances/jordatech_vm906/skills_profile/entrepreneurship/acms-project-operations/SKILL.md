@@ -165,6 +165,10 @@ known anchor lines, then re-verify with git diff.
 - `references/hermes-harness-live-tests-2026-09.md` — Hermes 0.17.0 live
   control-mapping results (pause/resume unsupported, steer/interrupt verified),
   scratch-profile setup recipe, bridge-to-ACMS wiring.
+- `references/hermes-worker-bringup.md` — the full worker-runtime bring-up recipe
+  (VM clone → Hermes venv install via qga → LLM gateway wiring incl. context caps →
+  api-server platform config shape → systemd unit → verification + traps) as
+  executed on acms-worker-001.
 - Repo docs: `deploy/README.md` (operator runbook), ADR-0009 + ADR-0010 (both
   Accepted 2026-09-26/27), `docs/HARNESS_CONTROL_MAPPING.md`, `SPRINT.md`
   (current slices), handoffs under `docs/handoffs/`.
@@ -190,11 +194,25 @@ known anchor lines, then re-verify with git diff.
 - **Next steps logged in agents.md:** wire `ACMS_BRIDGE_TARGETS_JSON` into
   CT122 env + dispatch/control buttons in the UI; slices 5–9 per master plan.
 
-## JINT-001 — Server Manager integration (live 2026-09-27, prod c0e3cfaa)
+## JINT-001 — Server Manager integration (live 2026-09-27, prod e1cd84ed, alembic 0005)
 
-- `acms/server_manager_client.py` (urllib, contract pinned Server Manager API 1.0.0) + `/api/v1/server-manager` routes: POST /agents (persistent identity reservation + `provisioning_requests` row with authority provenance per REV4 §14: human_in_acms | human_in_server_manager | pre-authorized_sprint_execution_context), POST /requests/{id}/provision (calls SM; ownership refusals → 403, SM errors → 502), GET /requests/{id} (correlates live job/runtime state). Migration `0004_provisioning_requests`.
+- `acms/server_manager_client.py` (urllib, contract pinned Server Manager API 1.0.0) + `/api/v1/server-manager` routes: POST /agents (persistent identity reservation + `provisioning_requests` row with authority provenance per REV4 §14: human_in_acms | human_in_server_manager | pre-authorized_sprint_execution_context), POST /requests/{id}/provision (calls SM; ownership refusals → 403, SM errors → 502), GET /requests/{id} (correlates live job/runtime state). Migrations `0004_provisioning_requests`, `0005_prov_attempt`.
+- **State honesty (live-found bug):** the provision route MUST reflect the returned SM job state — SM job FAILED → request FAILED with the error, DONE → LIVE + runtime_id correlation via `list_runtimes`, else PROVISIONING. Unconditionally writing PROVISIONING stuck a failed request permanently (blocking both retry and truth). ACMS prod now runs this fix.
+- **Retry semantics (live-found):** same request_id replays the original (failed) SM job forever; deriving `|retry:N` by counting markers recomputes N=1 forever. Real fix = monotonic `attempt` column (migration 0005, default 1, increment per retry → `request_id|retry:N`).
+- **create_runtime timeout:** provisioning is synchronous server-side (clone+boot = minutes); the 30 s client default timed out while the job completed — ACMS then recorded FAILED for a LIVE runtime. `create_runtime` now uses timeout=600; other calls stay at the default.
+- **Honest-state correctness chained into worker bootstrap:** the request that hit the timeout recorded FAILED while VM 124 was actually LIVE — corrected manually via SQL (state='LIVE', runtime_id, job_id). When reconciling such rows, pull truth from the SM side (`GET /api/v1/agent-runtimes?acms_agent_id=`), never assume.
 - **Pitfalls found live:**
-  - **compose `environment:` enumerates explicitly** — new ACMS_* settings NEVER reach the container from `--env-file` alone; add passthrough lines to `deploy/compose.yaml` (live symptom: "Server Manager integration not configured" 503 despite env in /opt/acms/.env).
-  - **`env_prefix="ACMS_"`** — Settings fields map to `ACMS_<FIELD>` env vars; naming them `SERVER_MANAGER_*` (no prefix) silently leaves settings empty. Same class as the Keyname contract: check the prefix before writing env lines.
+  - **compose `environment:` enumerates explicitly** — new ACMS_* settings NEVER reach the container from `--env-file` alone; add passthrough lines to `deploy/compose.yaml` (live symptom: "Server Manager integration not configured" 503 despite env in /opt/acms/.env). Applied to `ACMS_SERVER_MANAGER_*` AND `ACMS_BRIDGE_TARGETS_JSON` — grep compose when adding any setting.
+  - **`env_prefix="ACMS_"`** — Settings fields map to `ACMS_<FIELD>` env vars; naming them `SERVER_MANAGER_*` (no prefix) silently leaves settings empty. Check the prefix before writing env lines.
   - **CT122 nginx 403s 127.0.0.1-originated API calls from inside the CT** (allowlist covers the CT IP, not loopback) — call ACMS APIs via `https://10.0.20.122`, not `https://127.0.0.1`.
   - **ACMS repo has GitHub issues DISABLED** — reference `ACMS-REQ-###` in commit messages instead of creating issues (issue creation fails with "has disabled issues").
+  - **Bridge chat shape:** `/api/sessions/{sid}/chat` expects `{"message": str}`; the `{"messages": [...]}` array shape 400s with `missing_message` (steer + send_work session-bound path both fixed, PRs #20/#21).
+
+## Worker runtime facts (acms-worker-001, provisioned via the full chain 2026-09-27)
+
+- VM 124 on miam00111 @ 10.0.20.203 (DHCP), runtime_id 56c1b849-5407-452b-b326-b6e3ff7000e1, ACMS agent 22ac1b19-b7c9-4fd8-bf70-0b8e654ee026, cloned from template VM 121 (VM103-lineage Ubuntu 24.04 + legacy st-agentd; hostname carries `miam00111-vllm-vm103` lineage — cosmetic).
+- §8 ownership marker lives in the VM's PVE `description` field (full JSON: server_runtime_id / acms_agent_id / request_id / created_by_agent_runtime_manager=true / template_source) — written at provision time by ARM; the destroy path refuses without it.
+- Worker Hermes: venv `/opt/hermes-venv` (hermes-agent via pip; aiohttp REQUIRED for the api-server platform), profile `acms-worker-001`, bridge = `hermes-bridge.service` running `hermes gateway run --profile acms-worker-001 --replace` (gateway run takes NO --host/--port — they go in the profile config under `platforms.api_server.extra.{host,port,key}`; top-level host/port keys are IGNORED, defaults to loopback:8642). `API_SERVER_KEY` also required as env (both extra.key and the env var).
+- Worker LLM path: profile provider `llm-manager` → `http://10.0.20.108:8080/v1` (nginx plain-LAN surface on VM114 — self-signed TLS on :443 breaks OpenAI clients; bearer key is the auth layer on the private network). LiteLLM virtual key `agent_key_acms_worker_001` (0600 on VM114). Profile model caps: `model.context_length: 70000`, `max_tokens: 8192`, `tools.tool_search.enabled: "on"` (same playbook as the 2026-09-20 qwen3.8 70K incident — otherwise Hermes requests context-minus-prompt output tokens and litellm 400s ContextWindowExceeded).
+- nginx backups must NEVER live in `sites-enabled/` (duplicate default_server breaks reload) — `/etc/nginx/backups/`. The VM114 sites-enabled file has DIVERGED from sites-available (enabled = live v2 TLS config).
+- Worker bootstrap runs via node qga (`qm guest exec 124 -- bash -c ...`): stage scripts as base64 files, run under nohup for long installs (qga channel wedges on long execs).
