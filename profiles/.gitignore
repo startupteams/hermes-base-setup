@@ -1,0 +1,20 @@
+# profiles/<name>/ per-agent hygiene (REV4 10A): runtime state out of Git
+# Secrets first (fail-safe): profile config.yaml carries provider/bridge keys
+config.yaml
+.env
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+*.lock
+*.log
+gateway*
+.ssh/
+bin/
+cache/
+audio_cache/
+image_cache/
+sandboxes/
+cron/output/
+__pycache__/
+*.py[cod]
