@@ -1,8 +1,8 @@
-Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Economics); see business-idea-systems skill.
+STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
 BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
 §
-ACMS: ~/work/acms-project-framework (.venv-acms). Prod d696826 (0008): budgets, economics, attention, dispatch gate (PR28), Attention UI+SSE (PR29). dispatch_service = single A2A path w/ budget gate. NEXT: ACMS_BRIDGE_TARGETS_JSON on CT122 → first real dispatch to acms-worker-001. Smoke-test.sh runs ON CT122 only.
+ACMS prod 6f772aa (0008): dispatch PROVEN (WORK-000002→VM124 budget-gated), PRs #30-34 (FK fix, ADR-0011 Proposed, recovery guardrails, Jira-D/STL/portal/design-memory docs). Smoke on CT122 only. Lessons: template clones must re-identify netplan (VM108 .203 collided w/ VM124→.204); SQLite FK-off let agent_id='' reach PG. NEXT: gpu_samples Option A runbook; ADR-0011/Jira-D authorizations. Handoff ~/flight-work-20260929-acms/.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
@@ -12,7 +12,7 @@ MARION: no home.arpa DNS (raw IPs); Omen dual-boot tailnet via CT100 ts-ssh (PVE
 §
 Jordan: broad server autonomy (break OK — document, fix); questions before NEW plans then full autonomy; deliverable = single .md + Telegram upload.
 §
-LLM Mgr: ~/work/llm-manager-project-framework; PRs to #50. ORM 2-3 + SUPERSEDE (e773750) LIVE on VM114 prod; 5 stale rows SUPERSEDED→56c1b849. VM114 ops = dedicated keypair (ssh vm114). QGA: ping 500s = QEMU-side noise; exec/file channels authoritative; file-write = literal base64. gpu_samples: rollup+90d proposal, awaiting Jordan.
+LLM Mgr prod cb82bcd (PR51 ARM recovery max-5 + method audit; PR52 ORM slice-4 read-only). VM114 = ssh vm114. QGA: ping 500s = noise; exec/file authoritative. gpu_samples 197MB/1.59M rows, decision pending.
 §
 PVE: API token can't start/stop guests (501) → root SSH nodes (~/.miam_root_pass). onboot=1 guests may not auto-start after node power events — verify. Power-cut latency ~25s+. PDU 151:9=miam-00119; 152:3=miam-00135 (live node). cloudimg→VM via qm importdisk node-SSH; cipassword+reboot. LLDAP :17170 GraphQL.
 §

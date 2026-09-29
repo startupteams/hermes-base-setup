@@ -37,21 +37,28 @@ manual release transaction). Do not edit prod files in place.
 ## Release transaction to VM114 (proven loop)
 
 1. Local: `bash deploy/build-release.sh . dist` → tar.gz + sha256.
+   Build the artifact from the MAIN TIP, not your feature branch: create a
+   throwaway `git switch -c tmp-deploy-<sha> origin/main`, build from there,
+   then switch back (2026-09-29 pattern; keeps the artifact == merged main).
 2. Serve: `python3 -m http.server 8899 --bind 0.0.0.0` from `dist/`
    (Hermes background terminal); kill it after (`pkill -f 'http.server 8899'`).
-3. Pull on VM114 via qga (see below): curl both files, `mv` them to match the
-   sha256 filename, `sha256sum -c` → CHECKSUM_OK.
-4. Unpack the artifact and **run its OWN deploy/deploy-release.sh** (artifact
-   self-hosts its tooling — tooling fixes ride along; same chicken-and-egg
-   lesson as ACMS).
-5. Long-run: `nohup bash .../deploy-release.sh <tarball> > /tmp/llm-release-txn-<sha>.log 2>&1 &`,
-   then poll `tail` of the log via qga until `==> Release ACCEPTED (<full-sha>)`
-   + `healthcheck PASSED`.
+   **Simpler than http.server: `scp` the tarball+sha directly to
+   `vm114:/tmp/`** (VM114 has sshd via the dedicated key) — used successfully
+   2026-09-29 for both releases.
+3. On VM114: `sha256sum -c <tarball>.sha256` → OK.
+4. Run the CURRENT deployment's `deploy-release.sh` (`/opt/llm-manager/current/deploy/deploy-release.sh <tarball>`)
+   via `setsid nohup ... > /tmp/deploy-<sha>.log 2>&1 < /dev/null &` (plain
+   nohup from a ssh 'bash -c' dies with the session; setsid survives).
+5. Poll `tail` of the log via ssh until `==> Release ACCEPTED (<full-sha>)`
+   + `healthcheck PASSED`. Note: `pgrep -f deploy-release` matches your OWN
+   ssh command line — filter with `pgrep -fl 'deploy-release.sh /tmp'` or
+   you'll read a phantom "still running".
 6. If `server_manager/` code changed: `systemctl restart server-manager-api`
    (its own systemd unit; NOT restarted by the web-app transaction).
 7. Check `deploy/ ops/` diffs before releasing: if the transaction tooling
    itself changed, do a same-tip drill first (tooling-mid-flight is unproven).
 8. Verify: `curl -sk https://10.0.20.108/healthz` reports the new git_sha.
+   Clean the tarball+sha out of `/tmp` after success.
 
 **Preflight checksum trap (cost a release cycle 2026-09-28):** the `.sha256`
 file must sit NEXT TO the tarball AND be named `<tarball>.sha256`. The build
@@ -105,12 +112,34 @@ the tarball filename if the manifest lists the content-hash name).
   DB audit-event count, and `expire_all()` after API calls in tests (session
   caches the pre-update row) — a 404-before-422 test ordering trap means the
   bad-target test needs an existing row to hit 422.
+- **Recovery policy (PR #51, 2026-09-29, human direction):** default
+  `max_recovery_attempts` is now **5** (env `ARM_RECONCILE_MAX_ATTEMPTS`
+  overrides; prod has NO env override → 5 active). Backoff 10/20/40/60s capped
+  (attempts vary). Every attempt audits `failure_class` /
+  `recovery_method` / `attempt` in the RuntimeEvent detail (durable audit log
+  IS the recovery-method history — no second mutable table). Exhaustion
+  audits `strategy_next: human_attention`. Ladder: recheck/observe → VM start
+  ×5 → Human Attention. Service/harness restarts belong to LLM Manager
+  serving / ACMS bridge, NOT ARM; PDU hard-cycle is NEVER automatic. Tests:
+  `tests/server_manager/test_recovery_policy.py` (shared fakes imported from
+  test_reconciliation — import `make_runtime` too or NameError).
 
 ## llmmanager ORM migration (TDR-0008) — parity-test patterns
 
 - Slice 1 done (hosts/active_hosts/model_registry reflective models + read
   endpoints). Full 22-table inventory in the 2026-09-28 flight handoff.
   LiteLLM_* tables are NEVER "migrated" (adapter boundary).
+- **Slice 4 done (PR #52, 2026-09-29):** read-only reflective models for
+  `recovery_events / request_routing_log / electricity_rates / manager_settings`
+  (`server_manager/llm_manager/models/orm_slice4.py`), schema mapped from
+  prod via `information_schema` (verify live columns before writing a model —
+  dates are DATE not String, PKs vary). TDR-0008 now carries a slice log;
+  slice 5 = write-path parity behind adapters (row-count + checksum before
+  cutover), slice 6 = telemetry family AFTER the gpu_samples retention
+  decision (197 MB / 1.59M rows of a 225 MB DB as of 09-29; nothing deleted
+  without human approval). Schema-honesty tests pin table names/PKs/column
+  sets (`tests/server_manager/test_orm_slice4.py`) and assert the shared
+  LlmBase metadata (no-DDL invariant).
 - Parity tests (tests/server_manager/test_orm_parity.py, pgserver embedded):
   - `schema.sql` carries pg_dump ≥17 `\restrict`/`\unrestrict` meta lines —
     strip lines starting with backslash before `cur.execute(schema)`.
@@ -138,6 +167,8 @@ the tarball filename if the manifest lists the content-hash name).
 - ACMS counterpart skill: `acms-project-operations` (CT122 release.sh, UI).
 - PDU: `pdu-manager-vm154`; legacy AgentManager: `agent-manager-vm114`
   (superseded — see parity matrix + TDR-0010 in this repo's docs/).
+- OPNsense session-auth + IP-collision vetting recipe (login curl, Kea
+  reservation parsing, 5-step IP-vetting checklist): `references/opnsense-access-and-ip-vetting.md`.
 - Legacy AgentManager parity matrix: `docs/legacy-agentmanager-parity-matrix.md`;
   TDR-0008 (ORM staging), TDR-0009 (single-replica reconciler), TDR-0010
   (legacy alive pending UI parity) in this repo.

@@ -194,6 +194,42 @@ known anchor lines, then re-verify with git diff.
 - **Next steps logged in agents.md:** wire `ACMS_BRIDGE_TARGETS_JSON` into
   CT122 env + dispatch/control buttons in the UI; slices 5–9 per master plan.
 
+## Recovery guardrails (PRs #30–#32, 2026-09-29, prod 6f772aa)
+
+- **PR #30 live bug (budget events FK):** `budget_service` wrote
+  `agent_id=""` on BUDGET_SET/OVERRIDE/THRESHOLD_CROSSED →
+  `agent_events_agent_id_fkey` violation on prod PG; SQLite unit tests DON'T
+  enforce FKs so the whole suite passed while prod 500'd. Work-scoped events
+  now leave `agent_id` NULL. **Lesson: SQLite-with-FKs-off is a silent prod
+  gap class — when a unit DB is SQLite, grep for sentinel `""` foreign-key
+  values before trusting green tests.** Candidate FUTURE_WORK: FK pragma in
+  the unit engine.
+- **C4 (PR #32):** `AGENT_RUNNING_WITHOUT_ASSIGNMENT` = informational, emitted
+  ONCE per state entry (scheduler in-memory dedupe dict, reset on state exit),
+  never per tick; severity `info`; NO auto-remediation (human direction:
+  never auto-stop). Attention/SSE allowlists both new event types.
+- **C5:** `acms/reassignment_guard.py` — max 3 Executive reassignments per
+  work item, counted from durable `REASSIGNMENT_RECORDED` audit events (no
+  second mutable counter table); identical retry (`changed_dimension=none`)
+  → `REASSIGNMENT_REFUSED` (does NOT consume budget — the refusal must not
+  use the same event type or the count is poisoned); 4th real attempt →
+  `REASSIGNMENT_LIMIT_REACHED` (Attention high) and auto-reassignment stops.
+  Every attempt must declare changed_dimension. The subjective "<60%
+  instruction match" rule is deliberately NOT automated.
+- **Real dispatch PROVEN 2026-09-29** (ACMS-WORK-000002 → VM124, budget-gated,
+  echo verified via bridge messages API, $0 local, 12,385/84 tokens in
+  LiteLLM SpendLogs; retry=duplicate; attention 0; SSE dispatched). Loop:
+  create work → assign worker → `PUT /api/v1/budgets/work/{id}` →
+  `POST /api/v1/dispatch/work/{id}` → verify via bridge →
+  `POST /api/v1/work/tasks/{id}/finish?new_status=SUCCEEDED` (only
+  SUCCEEDED/FAILED/CANCELLED accepted) → close assignment → PATCH item to
+  completed. Bridge targets are IP-pinned in `ACMS_BRIDGE_TARGETS_JSON`
+  (`/opt/acms/.env`, compose passthrough exists); DNS indirection = future work.
+- **ACMS recovery policy counterpart:** ARM reconciler now max 5 attempts
+  (env `ARM_RECONCILE_MAX_ATTEMPTS`, prod unset → 5 active) with
+  failure_class/recovery_method/attempt audited per attempt and
+  `strategy_next: human_attention` at exhaustion — see the LLM Manager skill.
+
 ## JINT-001 — Server Manager integration (live 2026-09-27, prod e1cd84ed, alembic 0005)
 
 - `acms/server_manager_client.py` (urllib, contract pinned Server Manager API 1.0.0) + `/api/v1/server-manager` routes: POST /agents (persistent identity reservation + `provisioning_requests` row with authority provenance per REV4 §14: human_in_acms | human_in_server_manager | pre-authorized_sprint_execution_context), POST /requests/{id}/provision (calls SM; ownership refusals → 403, SM errors → 502), GET /requests/{id} (correlates live job/runtime state). Migrations `0004_provisioning_requests`, `0005_prov_attempt`.

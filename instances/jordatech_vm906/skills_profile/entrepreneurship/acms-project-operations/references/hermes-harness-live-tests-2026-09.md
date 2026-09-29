@@ -58,6 +58,36 @@ ACMS records max_source and shows UNKNOWN/INVALID rather than fabricating.
 5. Fill `docs/HARNESS_CONTROL_MAPPING.md` test-log table with results; the
    PR review depends on it.
 
+## 2026-09-29 live-proven E2E additions (real dispatch window)
+
+- **Result verification path:** the dispatched run's transcript is readable
+  from the CONTROL side: `GET /api/sessions/{run_id}/messages` returns
+  `{object: "list", data: [{role, content, ...}]}` — that is how you verify
+  what the worker actually replied (don't guess from run status alone).
+  `GET /v1/runs/{id}` gives `{run_id, status: completed|...,
+  session_id, created_at}`; the session object has NO status field (null) —
+  status lives on the RUN, not the session.
+- **Usage/cost truth lives in LiteLLM SpendLogs** (litellm DB on .116), NOT in
+  ACMS: `"LiteLLM_SpendLogs"` (quote it, PascalCase) has
+  `request_id, api_key(sha), model, prompt_tokens, completion_tokens, spend,
+  "startTime"`. Match an agent key to its usage by `sha256(token)` prefix
+  against the SpendLogs `api_key` column (worked first try). SQL via psql on
+  VM114 using `/etc/llm-manager/secrets/pg_app_creds`; the litellm DB is
+  separate from `llmmanager`.
+- **Bridge-reachability failure is usually NOT the gateway.** 2026-09-29:
+  :8402 "connection refused" from everywhere while VM124 self-probed fine →
+  **ARP/IP collision**: another guest (VM108, template clone with
+  netplan-static .203) answered for 10.0.20.203; CT122's `ip neigh` showed the
+  impostor MAC while VM124 self-owned .203. Diagnosis order that worked:
+  (1) `ip neigh` from the caller vs the worker's actual NIC MAC, (2) ssh-keyscan
+  / port-probe from 2+ vantage points, (3) scan PVE guest configs for the MAC
+  (`/cluster/resources` → per-VM `config` netX), (4) netplan diff between
+  suspect + victim. Fix = move the squatter to a proven-free IP (check OPNsense
+  Kea reservations + ARP + static configs; DHCP pool is .190–.250 — pick below
+  it), keep a netplan `.bak`, then verify the caller's ARP flips to the real
+  MAC. **Template clones must re-identify netplan IP** — add to bring-up
+  checklists. Related: worker bring-up reference.
+
 ## ACMS side that consumed this
 
 - `acms/bridge.py` (HermesBridge: fetch_status/send_work/steer/interrupt/
