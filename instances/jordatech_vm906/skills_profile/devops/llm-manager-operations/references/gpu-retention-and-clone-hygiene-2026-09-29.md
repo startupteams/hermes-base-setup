@@ -75,11 +75,20 @@ hostname starting with "template", IP owned by another runtime's metadata,
 Deliberately NOT wired into `provisioning.py _provision_vm` yet — pure additive
 module; enforcement-in-path is the next slice. "No current ARP response" ≠ IP free.
 
-## Open items
+## Open items — RESOLVED later on 2026-09-29 (window 3)
 
-- PRs #57/#58 merged but NOT yet deployed to VM114 (next release transaction).
-- Wire clone-hygiene into `_provision_vm` step 5.5 (needs Jordan's nod — changes
-  live provisioner behavior).
+- ~~PRs #57/#58 merged but NOT yet deployed~~ → deployed 0b63c01, then main
+  advanced to 1cea3e4 (see SKILL.md ORM slice 5/6 section — cutover is LIVE).
+- ~~Wire clone-hygiene into `_provision_vm`~~ → DONE as step 6 HYGIENE_GATE
+  (PR #59); see `references/provisioning-hygiene-gate-2026-09-29.md`.
+- **NEW finding (window 3, PR #66): cmd_rollup's trailing-3h window started
+  MID-HOUR** (`now - 3h` at :01-:05) — the oldest hour bucket was upserted
+  from a truncated row set and later runs never re-covered the deficit
+  (permanent; verify FAIL 104 mismatches, rollup 134 vs raw 142 per bucket).
+  Fixed: hour-aligned start edge (`since.replace(minute=0, second=0,
+  microsecond=0)`). Live repair: re-aggregated 24h → 576 buckets → VERIFY
+  PASSED 0 failures. This is the same class as the backfill-chunk lesson
+  above: EVERY rolling window must be hour-aligned at its START.
 - ARM-authoritative bridge discovery deployed on the ACMS side (ACMS PR #42);
   the ARM runtime record may later carry `bridge_base_url`/`bridge_api_key`
   directly, which the discovery module already prefers.

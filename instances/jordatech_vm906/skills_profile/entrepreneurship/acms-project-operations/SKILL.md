@@ -158,6 +158,45 @@ garbage text). For large/critical writes: verify immediately after writing,
 and if corrupted, repair via a python rewrite with assertion pre-checks on
 known anchor lines, then re-verify with git diff.
 
+## PR-discipline trap (hit TWICE on 2026-09-29 — mandatory habit)
+
+`gh pr merge --squash --delete-branch` checks the LOCAL checkout out onto
+`main` when it deletes the branch. A following `git push -q` (or any commit +
+push) then goes DIRECT to main — Jordan's token has admin rights, so branch
+protection silently bypasses (remote prints "Bypassed rule violations" but the
+push lands). Happened twice in one window (c2d68d7, 8575982; content was
+green, the process was violated). **Habit: after every merge-with-delete-branch,
+run `git branch --show-current` BEFORE any commit; if on main, `git switch -c
+<branch> origin/main` first.** Never `git push` bare from a merge aftermath.
+
+## ADR-0012 completion callback (PRs #45/#46, 2026-09-29, live)
+
+- `POST /api/v1/callbacks/execution-completion` — dedicated scoped token
+  `ACMS_CALLBACK_TOKEN` (never the admin token; unset ⇒ 503 fail-closed).
+  CT122 env has CALLBACK_TOKEN (hex) + `ACMS_CALLBACK_BASE_URL=https://10.0.20.122`
+  in /opt/acms/.env; compose passthroughs merged (PR #47, which also added
+  ACMS_JIRA_* + ACMS_GITHUB_ECONOMICS_TOKEN passthroughs).
+- Identity binding: task must belong to the claimed agent (mismatch → 403 +
+  durable EXECUTION_CALLBACK_REJECTED audit; unknown task → 404 + audit).
+  Duplicate/late → idempotent `already_terminal`. Success → no Attention item.
+- **dispatch_service now PRE-creates the execution task before the bridge
+  call**; the task id travels in the instruction (COMPLETION PROTOCOL block,
+  gated on ACMS_CALLBACK_BASE_URL); `external_task_id` = the REAL A2A run id.
+  The dispatch idempotency ledger MOVED to the EXECUTION_DISPATCHED event
+  metadata (dedupe_key → task_id) — code querying `external_task_id ==
+  "disp-<key>"` is stale.
+- **Live proof pattern (ACMS-WORK-000004):** dispatch → session auto-open →
+  Hermes run completes (LiteLLM SpendLogs row = cost-of-record) → worker GLM
+  IGNORED the in-instruction completion protocol → the telemetry-scheduler
+  reconcile sweep closed the task from bridge run status + the orphaned OPEN
+  session (both orderings: task-then-session and session-already-orphaned) →
+  zero manual close. The reconciler IS the working completion authority until
+  a runtime-side callback hook exists (Hermes api-server has no run-completion
+  webhook).
+- Live endpoint probes from the CT HOST work via curl; from INSIDE the app
+  container nginx 403s (container-network source not allowlisted) — same
+  rule as all CT122 API probing.
+
 ## Pointers
 
 - `references/live-drill-2026-09-26.md` — bug-by-bug drill breakdown, exact
@@ -175,9 +214,40 @@ known anchor lines, then re-verify with git diff.
   Accepted 2026-09-26/27), `docs/HARNESS_CONTROL_MAPPING.md`, `SPRINT.md`
   (current slices), handoffs under `docs/handoffs/`.
 
-## Combined slice 3+4 state (deployed 2026-09-27, v0.6.0 @ 85f3c92)
+## Test-suite hygiene (conftest patterns — keep using these)
 
-- **ADR-0009 Accepted** (amended: live evidence + explicit deployment-authority
+- **The shared SQLite unit DB persists rows across tests in one pytest run** —
+  any suite asserting event/row COUNTS must use the `clean_db` fixture
+  (conftest DELETEs all tables, FK-off during wipe). Symptom when missing:
+  count assertions see prior tests' rows (`assert 2 == 1`-style failures that
+  pass under `-x` in isolation but fail in full runs).
+- `get_settings()` is lru_cached — env-var fixtures must
+  `get_settings.cache_clear()` on entry AND exit (see
+  test_work_creation_guard.py pattern).
+- Endpoint tests: sync `TestClient(app)` + async dependency override
+  (`app.dependency_overrides[get_session] = async gen`), NOT
+  httpx.ASGITransport with a sync client (fails:
+  "ASGITransport object has no attribute handle_request").
+- Reconciler/scheduler tests monkeypatch `acms.bridge.get_bridge_for_agent`
+  (the attribute resolved at call time), not the scheduler module.
+- asyncio_mode=auto (pyproject) — plain `async def test_` works; `db` fixture
+  pattern: `async for session in get_session(): yield session`.
+
+## Human-credential playbook (learned 2026-09-29)
+
+When a plan authorizes an integration but the credential requires web-UI
+creation (Atlassian API tokens, GitHub fine-grained PATs — NO REST create
+path exists for either):
+1. Search session archives (session_search across queries) + Honcho memory
+   for the credential BEFORE declaring it missing — but NEVER reuse unrelated
+   credentials found in context (wrong-boundary facts stay facts).
+2. Do NOT ask the human to re-paste passwords into chat (plan §1.2 pattern).
+3. Write an exact `HUMAN-SETUP-*.md` (step-by-step UI path + two install
+   options: human does it via ssh, or pastes into chat for staging into
+   /opt/acms/.env without echoing) + merge the compose passthrough so
+   activation = human adds env vars + container recreate.
+4. Continue all other work — never block the sprint on the credential.
+## Combined slice 3+4 state (deployed 2026-09-27, v0.6.0 @ 85f3c92)
   policy); **ADR-0010 Accepted** — heartbeat 60s / STALE 300s / reconcile
   3600s / fleet 86400s / alignment grace 120s / context warnings 70-85-95,
   all config-backed via `ACMS_*` settings (settings.py gained the fields).

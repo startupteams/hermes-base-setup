@@ -34,7 +34,7 @@ manual release transaction). Do not edit prod files in place.
   assets, asset power-state, action-plans=DRY-RUN, jobs, audit; actuation
   env-gated `SERVER_MANAGER_PDU_ACTUATION=1`, `off` refused at SM layer).
 
-## Release transaction to VM114 (proven loop)
+## VM114 release transaction (proven loop)
 
 1. Local: `bash deploy/build-release.sh . dist` → tar.gz + sha256.
    Build the artifact from the MAIN TIP, not your feature branch: create a
@@ -45,7 +45,13 @@ manual release transaction). Do not edit prod files in place.
    **Simpler than http.server: `scp` the tarball+sha directly to
    `vm114:/tmp/`** (VM114 has sshd via the dedicated key) — used successfully
    2026-09-29 for both releases.
-3. On VM114: `sha256sum -c <tarball>.sha256` → OK.
+3. On VM114: `sha256sum -c <tarball>.sha256` → OK. **The `.sha256` file must
+   be named `<tarball>.sha256` and sit next to it** — the build names the sha
+   after the CONTENT hash; rewrite the single line first
+   (`python -c` writing `<content-hash>  <tarball-name>`) or preflight aborts.
+   Also: **build-release.sh names tarballs with the SHORT (12-char) sha**
+   (`llm-manager-8b05afb5c586.tar.gz`) while GitHub artifact uploads use the
+   full `github.sha` — never match an artifact by full sha.
 4. Run the CURRENT deployment's `deploy-release.sh` (`/opt/llm-manager/current/deploy/deploy-release.sh <tarball>`)
    via `setsid nohup ... > /tmp/deploy-<sha>.log 2>&1 < /dev/null &` (plain
    nohup from a ssh 'bash -c' dies with the session; setsid survives).
@@ -59,13 +65,27 @@ manual release transaction). Do not edit prod files in place.
    itself changed, do a same-tip drill first (tooling-mid-flight is unproven).
 8. Verify: `curl -sk https://10.0.20.108/healthz` reports the new git_sha.
    Clean the tarball+sha out of `/tmp` after success.
+9. **Env persistence across releases:** systemd DROP-INS survive releases —
+   env set via drop-in files (e.g.
+   `/etc/systemd/system/llm-manager-web.service.d/orm-cutover.conf`) is NOT
+   lost when a new release ships; plain env vars passed at restart time ARE.
+   There is no `/opt/llm-manager/.env` (staging toggle learned this: `touch ""
+`).
 
-**Preflight checksum trap (cost a release cycle 2026-09-28):** the `.sha256`
-file must sit NEXT TO the tarball AND be named `<tarball>.sha256`. The build
-names the sha file after the CONTENT hash, not the tarball — preflight
-`sha256sum -c` then fails and the release aborts. Fix before transfer:
-`mv <content-hash>.sha256 <tarball>.sha256` (edit the single line to point at
-the tarball filename if the manifest lists the content-hash name).
+## Staging VM120 (10.0.20.131) — access reality
+
+- NO direct shell for the agent (no root ssh from workstation or VM114; the
+  CT130 self-hosted runner's `llm-manager-deploy@10.0.20.131` key is the ONLY
+  path, and that user's sudo is wrapper-only: bootstrap/deploy/healthcheck
+  wrappers — arbitrary sudo asks for a password).
+- Staging auto-deploys on main push via `deploy-staging.yml`. Verify with
+  `curl -sk https://10.0.20.131/healthz` — the git_sha must match main tip.
+- One-shot env toggles go through the `staging-orm-cutover-toggle.yml`
+  workflow (workflow_dispatch, value=1/0) — it writes systemd drop-ins,
+  daemon-reloads, restarts, and verifies via `systemctl show`.
+- When VM120 access blocks a staging-first validation, prod validation via
+  VM114 root + systemd drop-ins is the accepted fallback (documented
+  deviation; prod cutover flag is instantly reversible by removing drop-ins).
 
 ## CI / merge discipline
 
@@ -78,7 +98,23 @@ the tarball filename if the manifest lists the content-hash name).
   does NOT block `git push origin HEAD` from a local `main`. After a squash
   merge you are left ON main — always `git checkout -b feat/...` BEFORE the
   next commit, or you bypass review (happened twice 2026-09-28; CI covered it,
-  but it's against repo policy).
+  but it's against repo policy). **Confirmed still live 2026-09-29 (2 more
+  violations): the merge command itself leaves the local checkout ON main —
+  make `git branch --show-current` the mandatory first command after ANY
+  merge-with-delete.**
+- **CD artifact chain (3 bugs found + fixed 2026-09-29, PRs #61-#64):**
+  deploy-staging "succeeded" while deploying a 2-day-old artifact. (1) Self-
+  hosted runners REUSE RUNNER_TEMP — stale `llm-manager-*.tar.gz` survive jobs
+  and `find | head -1` picks them: always rm stale tarballs + select by EXACT
+  name (short-sha form — see the release-transaction section). (2) Do NOT `rm
+  artifact.zip` in the unpack step — the download step writes it fresh; rm-ing
+  it after download kills unzip ("cannot find or open artifact.zip"). (3)
+  `dist/` was TRACKED in the repo (no .gitignore entry) — the CI artifact zip
+  contained multiple committed stale tarballs; fixed by git-rm + gitignore +
+  a CI step asserting exactly ONE tarball pair before upload.
+  Verify staging health: `curl -sk https://10.0.20.131/healthz` must report
+  the current main git_sha — a "successful" deploy-staging run proves nothing
+  on its own.
 
 ## PVE qga exec pattern (how you touch VM114/VM124)
 
@@ -129,17 +165,52 @@ the tarball filename if the manifest lists the content-hash name).
 - Slice 1 done (hosts/active_hosts/model_registry reflective models + read
   endpoints). Full 22-table inventory in the 2026-09-28 flight handoff.
   LiteLLM_* tables are NEVER "migrated" (adapter boundary).
-- **Slice 4 done (PR #52, 2026-09-29):** read-only reflective models for
+- **Slice 5+6 done + CUTOVER LIVE (PRs #60/#66, 2026-09-29):** the v011 legacy
+  app routes hosts/model_registry/recovery_events + gpu_samples family writes
+  through sync SQLAlchemy Core adapters behind `ORM_WRITE_CUTOVER=1`
+  (systemd drop-ins on web+recovery+collector; default OFF = legacy psycopg2;
+  rollback = remove drop-ins + daemon-reload + restart).
+  - `service/app/orm_write_adapter.py` — sync Core over the SAME schema (no
+    DDL, column whitelist, v011 credential contract: LLM_MANAGER_PG_HOST env
+    fallback + PG_PW_FILE `PG_PW=` line; prod DB is CT115 @ 10.0.20.116, NOT
+    127.0.0.1). v011_core desired-state/power-off/sync_registry/routable_models
+    + v011_recovery audit()/recent_count() call it.
+  - `service/app/gpu_orm.py` — BULK insert (one multi-row INSERT per collector
+    cycle, never row-at-a-time), hourly_rollup_window (identical upsert SQL
+    incl. power_sum_wh/last_ts + DO UPDATE refresh), bounded prune on
+    `sample_id` PK (gpu_samples has NO `id` column), parity checksums.
+  - **Legacy-parity finding:** `model_registry` UNIQUE(logical_model_name,
+    host_id) does NOT dedupe NULL host_ids (PG treats NULLs as distinct) —
+    alias inserts need the legacy delete-then-insert order or they duplicate.
+  - **cmd_rollup window MUST be hour-aligned at the START edge** (W2's
+    backfill-chunk lesson applies to every rolling window): `now-3h` mid-hour
+    truncated the oldest bucket and later runs never re-covered it → permanent
+    deficit (verify FAIL 104 mismatches, rollup 134 vs raw 142). Fix + live
+    repair (re-aggregate 24h → 576 buckets) → VERIFY PASSED 0 failures.
+  - `sqlalchemy` was in the requirements freeze but NOT in the prod venv —
+    pip-installed 2.0.54 into `/opt/llm-manager/venv` (venv is NOT rebuilt by
+    the release transaction; freeze drift is now known debt).
+  - **The systemd unit's WorkingDirectory (/opt/llm-manager/app) is a STALE
+    static dir; the RUNNING process cwd is
+    `/opt/llm-manager/releases/<sha>/service/app`.** Scripts probing deployed
+    code must `sys.path.insert(0, "/opt/llm-manager/current/app")` — and
+    `current/app` is a symlink into the active release.
+  - ORM is NOT imported by the FastAPI app for these domains yet — the flag
+    gates the legacy call sites themselves; parity tests live in
+    tests/test_orm_slice5_cutover.py + tests/test_gpu_orm_slice6.py (pgserver;
+    set PG_HOST=<socket dir>, PG_USER=postgres, PG_PW="" empty-string VALID —
+    `if pw is None` not `if not pw`, or empty trust passwords break).
+- Slice 4 done (PR #52): read-only reflective models for
   `recovery_events / request_routing_log / electricity_rates / manager_settings`
   (`server_manager/llm_manager/models/orm_slice4.py`), schema mapped from
   prod via `information_schema` (verify live columns before writing a model —
-  dates are DATE not String, PKs vary). TDR-0008 now carries a slice log;
-  slice 5 = write-path parity behind adapters (row-count + checksum before
-  cutover), slice 6 = telemetry family AFTER the gpu_samples retention
-  decision (197 MB / 1.59M rows of a 225 MB DB as of 09-29; nothing deleted
-  without human approval). Schema-honesty tests pin table names/PKs/column
-  sets (`tests/server_manager/test_orm_slice4.py`) and assert the shared
+  dates are DATE not String, PKs vary). TDR-0008 carries a slice log.
+  Schema-honesty tests pin table names/PKs/column sets
+  (`tests/server_manager/test_orm_slice4.py`) and assert the shared
   LlmBase metadata (no-DDL invariant).
+- LiteLLM-owned writes are NEVER absorbed (SpendLogs lives in the separate
+  `litellm` database — `SELECT ... FROM "LiteLLM_SpendLogs"` needs
+  `-d litellm`, not `-d llmmanager`).
 - Parity tests (tests/server_manager/test_orm_parity.py, pgserver embedded):
   - `schema.sql` carries pg_dump ≥17 `\restrict`/`\unrestrict` meta lines —
     strip lines starting with backslash before `cur.execute(schema)`.
@@ -170,7 +241,15 @@ the tarball filename if the manifest lists the content-hash name).
 - OPNsense session-auth + IP-collision vetting recipe (login curl, Kea
   reservation parsing, 5-step IP-vetting checklist): `references/opnsense-access-and-ip-vetting.md`.
 - Legacy AgentManager parity matrix: `docs/legacy-agentmanager-parity-matrix.md`;
-  TDR-0008 (ORM staging), TDR-0009 (single-replica reconciler), TDR-0010
-  (legacy alive pending UI parity) in this repo.
+  TDR-0008 (ORM staging), TDR-0009 (single-replica reconciler), TDR-0010 (legacy alive pending UI parity) in this repo.
 - Session-specific detail (flight 2026-09-28 state, PR list, debugging
+  stories, live-proof transcript, open items): `references/flight-2026-09-28-session-notes.md`
+- **ADR-0012 completion callback live notes** (contract, dispatch changes,
+  reconciler sweep, live proof, probe recipes, test patterns):
+  `references/adr0012-completion-callback-2026-09-29.md`
+- **CD artifact chain repair** (RUNNER_TEMP staleness, rm-order, tracked dist/,
+  short-sha naming, staging access reality, debug technique):
+  `references/cd-artifact-chain-repair-2026-09-29.md`
+- **Provisioning hygiene gate** (HYGIENE_GATE wiring, checks, failure
+  semantics, test patterns): `references/provisioning-hygiene-gate-2026-09-29.md`
   stories, live-proof transcript, open items): `references/flight-2026-09-28-session-notes.md`
