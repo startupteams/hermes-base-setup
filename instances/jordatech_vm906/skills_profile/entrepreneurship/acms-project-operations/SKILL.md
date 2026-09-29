@@ -169,6 +169,8 @@ known anchor lines, then re-verify with git diff.
   (VM clone → Hermes venv install via qga → LLM gateway wiring incl. context caps →
   api-server platform config shape → systemd unit → verification + traps) as
   executed on acms-worker-001.
+- `references/ip-collision-10-0-20-203-case-2026-09-29.md` — the template-clone
+  impostor-IP case (symptoms, ARP diagnosis, VM108 renumber, generalization).
 - Repo docs: `deploy/README.md` (operator runbook), ADR-0009 + ADR-0010 (both
   Accepted 2026-09-26/27), `docs/HARNESS_CONTROL_MAPPING.md`, `SPRINT.md`
   (current slices), handoffs under `docs/handoffs/`.
@@ -225,10 +227,46 @@ known anchor lines, then re-verify with git diff.
   SUCCEEDED/FAILED/CANCELLED accepted) → close assignment → PATCH item to
   completed. Bridge targets are IP-pinned in `ACMS_BRIDGE_TARGETS_JSON`
   (`/opt/acms/.env`, compose passthrough exists); DNS indirection = future work.
+  **IP-collision trap:** see
+  `references/ip-collision-10-0-20-203-case-2026-09-29.md` — a template-clone
+  impostor (VM108) squatted on the worker's `.203` and bridge traffic hit the
+  wrong guest while every app-level check passed; diagnose at the ARP/MAC
+  layer before touching config.
 - **ACMS recovery policy counterpart:** ARM reconciler now max 5 attempts
   (env `ARM_RECONCILE_MAX_ATTEMPTS`, prod unset → 5 active) with
   failure_class/recovery_method/attempt audited per attempt and
   `strategy_next: human_attention` at exhaustion — see the LLM Manager skill.
+
+## Agent-state ownership + architecture recs (PRs #33–#34, 2026-09-29, in prod 6f772aa)
+
+- **Work lifecycle default (PR #31, ADR-0011 Proposed — awaiting Jordan's
+  acceptance):** Work Item = ONE measurable goal; a goal may span multiple
+  execution sessions (crash/context-rotation/retry does NOT spawn a new Work
+  Item); the NEXT measurable goal = the next CHILD Work Item linked to the
+  same Feature/Program parent (smallest-safe parent/child representation;
+  Executive Agent may propose the next child only within the approved parent
+  scope, provenance recorded — no silent scope expansion). Review findings
+  classify BLOCKING / REQUIRED / OPTIONAL; OPTIONAL findings never block
+  completion and review never creates new product scope.
+- **Ownership contract (human direction, durable):** Server Manager/ARM owns
+  agent state-sync health (`last_state_commit_sha`/`state_sync_health`); ACMS
+  may consume a summarized health signal only. Do NOT build ACMS-side
+  git/cloud-backup sync state or UI implying ACMS authorship — that duplicates
+  ARM authority. Existing ACMS copies stay read-only until a
+  compatibility/migration path is proven (never delete data first).
+- **Architecture recommendations awaiting Jordan's sign-off** (docs under
+  `docs/architecture/` in the ACMS repo, PR #34): Jira = **Option D** (Jira
+  parents authoritative for human planning; ACMS AI micro-work beneath;
+  one-way summary/progress sync upward; never mutate Jira without explicit
+  authorization); Speed-to-Lead = separate product repo + **dedicated External
+  Agent Gateway** (a service boundary, not a bare firewall) +
+  `agentifyme-external-agent-base` PROPOSED but NOT created (repo creation
+  needs Jordan's OK); tenant-isolation threat/test plan drafted (no prod
+  pentest); design memory = Git/Markdown canonical, vector index only as a
+  rebuildable retrieval layer (never canonical storage); portal discovery
+  found the REAL prototype repo `startupteams/agentifyme-speed-to-lead`
+  (prototype + P0 15/15 + UX docs; High Point demo pending Utkarsh) — no UI
+  redesign until Jordan reviews the discovery doc.
 
 ## JINT-001 — Server Manager integration (live 2026-09-27, prod e1cd84ed, alembic 0005)
 

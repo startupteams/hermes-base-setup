@@ -1,6 +1,6 @@
 ---
 name: hermes-file-delivery
-description: "Deliver files to the user through Hermes messaging platforms (Telegram etc.) — MEDIA:<path> tag in the final reply, MEDIA_DELIVERY_EXTS extension allowlist (.md works), [[as_document]] directive, adapter send paths, troubleshooting."
+description: "Deliver files to the user through Hermes messaging platforms (Telegram etc.). THE mechanism is the MEDIA:<path> tag in your final reply — there is no send tool to search for. FIRST skill to load for any 'send/upload/put this file on Telegram' request. Covers the tag, MEDIA_DELIVERY_EXTS allowlist (.md works), [[as_document]] directive, adapter send paths, troubleshooting."
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -45,22 +45,27 @@ the text is delivered.
 ## Pitfalls
 
 - **"Send this over Telegram" ≠ find a send tool — READ THIS SKILL FIRST.**
-  This exact failure recurred 2026-09-28: a full session burned 8+ tool_search
-  round-trips hunting a send tool for a "handoff file here on Telegram" ask,
-  then shipped via a raw Bot API script — while this skill prescribed the
-  one-step answer (MEDIA: tag in the final reply, no tool call at all). When a
-  file-delivery request arrives, the DEFAULT is: write/verify the file, then
-  put `MEDIA:<abs-path>` on its own line in the final reply. Do not tool_search
-  for send mechanisms. There is a `send_message` tool in the codebase
-  (tools/send_message_tool.py, supports `MEDIA:<path>` in message text) but it
-  is NOT wired into this profile's runtime toolset — do not go looking; the tag
-  path needs nothing.
+  This failure has recurred TWICE (2026-09-28 and again 2026-09-29: multiple
+  tool_search round-trips hunting a send tool, two attempts at an unloaded
+  `send_message` tool, then a raw Bot API script — while the one-step answer
+  was sitting here). When a file-delivery request arrives, the DEFAULT is:
+  write/verify the file, then put `MEDIA:<abs-path>` on its own line in the
+  final reply. Do not tool_search for send mechanisms. There is a
+  `send_message` tool in the codebase (tools/send_message_tool.py, supports
+  `MEDIA:<path>` in message text) but it is NOT wired into this profile's
+  runtime toolset — do not go looking; the tag path needs nothing.
+  **Session-start trigger:** if the request says "send/attach/deliver … over
+  Telegram (as a document/file)", load THIS skill before making any tool
+  calls about delivery.
 
 - **Last-resort fallback (gateway path unavailable):** Bot API sendDocument
-  works from terminal — read the active `TELEGRAM_BOT_TOKEN` from
-  `~/.hermes/.env` (uncommented line; never print it), take the chat_id from
-  `channel_directory.json`, POST multipart `sendDocument` with caption. Verify
-  `ok: true` + `message_id` in the response, then delete the helper script.
+  works from execute_code/terminal — read the active `TELEGRAM_BOT_TOKEN` from
+  the profile `.env` (uncommented line; never print it), take the chat_id from
+  `TELEGRAM_HOME_CHANNEL` (same file) or `channel_directory.json`, POST
+  multipart `sendDocument` with caption. Verify `ok: true` + `message_id` in
+  the response. Proven 2026-09-29 (16 KB .md handoff → home chat, doc
+  attachment + caption). Note the deliverable then lands OUTSIDE the gateway's
+  session history — prefer the tag whenever the gateway is up.
 - **Prose mentions don't deliver.** The tag must appear as a real `MEDIA:`
   token in the final reply — writing "the file is at /path/file.md" does
   nothing. Conversely, never write `MEDIA:` with a fake path in prose
