@@ -169,6 +169,19 @@ green, the process was violated). **Habit: after every merge-with-delete-branch,
 run `git branch --show-current` BEFORE any commit; if on main, `git switch -c
 <branch> origin/main` first.** Never `git push` bare from a merge aftermath.
 
+**PERMANENT FIXES now installed on the agent workstation (window-4, plan §D;
+still keep the habit — the guard is local to this machine):**
+- `~/.config/git/hooks/pre-push` via global `core.hooksPath` — REFUSES
+  pushes to `main|master|production` before the network is touched
+  (behavior-tested in a scratch repo). Emergency override:
+  `ACMS_ALLOW_PROTECTED_PUSH=1 git push …` (audited in shell history).
+  Server-side `gh pr merge` is a GitHub API operation — unaffected.
+- `~/bin/gh-merge <PR#>` — wraps merge-with-delete-branch, then runs the
+  mandatory branch check and auto-detaches to `origin/main` when the merge
+  landed the checkout on main. PATH via `~/.bashrc`.
+- Durable identity fix (least-privilege AI GitHub identity) = staged spike +
+  HUMAN-SETUP file in the flight-work dir; needs Jordan's web-UI action.
+
 ## ADR-0012 completion callback (PRs #45/#46, 2026-09-29, live)
 
 - `POST /api/v1/callbacks/execution-completion` — dedicated scoped token
@@ -185,14 +198,35 @@ run `git branch --show-current` BEFORE any commit; if on main, `git switch -c
   The dispatch idempotency ledger MOVED to the EXECUTION_DISPATCHED event
   metadata (dedupe_key → task_id) — code querying `external_task_id ==
   "disp-<key>"` is stale.
-- **Live proof pattern (ACMS-WORK-000004):** dispatch → session auto-open →
-  Hermes run completes (LiteLLM SpendLogs row = cost-of-record) → worker GLM
-  IGNORED the in-instruction completion protocol → the telemetry-scheduler
-  reconcile sweep closed the task from bridge run status + the orphaned OPEN
-  session (both orderings: task-then-session and session-already-orphaned) →
-  zero manual close. The reconciler IS the working completion authority until
-  a runtime-side callback hook exists (Hermes api-server has no run-completion
-  webhook).
+- **Runtime-driven watcher is now the PRIMARY path (window-4, PR #49, prod
+  3679067):** `acms/run_watcher.py` schedules a bounded in-process watcher at
+  dispatch (RunWatchRegistry, idempotent per task_id) that observes the bridge
+  run and delivers the EXACT authenticated callback on terminal state — model
+  compliance NOT required. Retries 0/10/30/60s on transient failure; permanent
+  rejections (403/404/503) stop immediately; watch lifetime bounded (2h
+  default, RUN_WATCH_EXPIRED audit); reconcile remains fallback. Settings:
+  ACMS_CALLBACK_WATCH_ENABLED (default true), ACMS_CALLBACK_SELF_URL (default
+  in-container loopback :8000 — nginx 403s compose-network sources),
+  ACMS_CALLBACK_WATCH_POLL_SECONDS/MAX_SECONDS. **CRITICAL pitfall: the
+  watcher is an asyncio task in the APP process — dispatch MUST go through
+  the API route (`POST /api/v1/dispatch/work/{id}`). Dispatching from a
+  one-shot script process schedules the watcher into a process that exits →
+  nothing watches (hit live: first proof attempt silently fell back to
+  reconcile).**
+- **Live callback-before-reconcile proof (ACMS-WORK-000007, 2026-09-29):**
+  API-route dispatch → worker explicitly instructed NOT to call back →
+  EXECUTION_COMPLETED "Completion callback: task … → SUCCEEDED" delivered by
+  the watcher (+50s) with EXECUTION_RECONCILED ABSENT (300s reconcile window
+  not elapsed) → task SUCCEEDED + session CLOSED, zero manual close. Tests:
+  tests/test_run_watcher.py (7). Hermes api-server still has no
+  run-completion webhook — the ACMS-side watcher is what closes that gap.
+- **Window-3 proof pattern (superseded as the completion authority, kept for
+  reconcile-fallback behavior):** dispatch → session auto-open → Hermes run
+  completes (LiteLLM SpendLogs row = cost-of-record) → worker GLM IGNORED the
+  in-instruction completion protocol → the telemetry-scheduler reconcile sweep
+  closed the task from bridge run status + the orphaned OPEN session (both
+  orderings: task-then-session and session-already-orphaned) → zero manual
+  close.
 - Live endpoint probes from the CT HOST work via curl; from INSIDE the app
   container nginx 403s (container-network source not allowlisted) — same
   rule as all CT122 API probing.
@@ -215,6 +249,17 @@ run `git branch --show-current` BEFORE any commit; if on main, `git switch -c
   (current slices), handoffs under `docs/handoffs/`.
 
 ## Test-suite hygiene (conftest patterns — keep using these)
+
+- **Migration-vs-model drift is invisible to SQLite unit tests** — create_all
+  builds from MODELS, so a migration that creates a differently-named column
+  (0008 created `commit_shas`, model/ingest expected `commit_shas_json`;
+  every economics write 500'd on prod) passes the whole suite.
+  `tests/test_migration_model_parity.py` (window-4, PR #50) upgrades a real
+  PG (pgserver) through the FULL chain and diffs EVERY ORM-mapped table's
+  column set against the migrated schema. **When adding a new models module,
+  add its import to that test's `_collect()`** or the new tables escape the
+  parity check. Run `tests/test_economics_migration.py`-style pinned-revision
+  chain tests for every migration regardless.
 
 - **The shared SQLite unit DB persists rows across tests in one pytest run** —
   any suite asserting event/row COUNTS must use the `clean_db` fixture
@@ -247,6 +292,22 @@ path exists for either):
    /opt/acms/.env without echoing) + merge the compose passthrough so
    activation = human adds env vars + container recreate.
 4. Continue all other work — never block the sprint on the credential.
+5. **ACTIVATION TRAP (hit live 2026-09-29):** a container ALREADY RUNNING
+   when the human installs the token keeps its OLD (empty) env — compose
+   `environment:` passthroughs resolve at container CREATE time, not start.
+   Symptom: host-side `.env` line non-empty, in-container value empty
+   string. Fix: recreate with the PINNED current image tag —
+   `ACMS_APP_IMAGE_TAG=<current-sha> docker compose ... up -d --force-recreate acms-app`
+   — then re-verify in-container non-emptiness. Also check env hygiene
+   WITHOUT printing values (CR endings, quotes, trailing whitespace all
+   break compose interpolation): awk length + pattern checks on the .env
+   file only.
+6. Safe live-verification recipe (Jira/any bearer API): run the probe
+   script INSIDE the acms-app container via base64-staged stdin
+   (`echo <b64> | base64 -d | docker compose exec -T acms-app python3 -`),
+   reading the token from `os.environ` — the secret never appears in any
+   command line, log, or handoff. Report only: status codes, counts,
+   identity booleans (email matches expected), lengths.
 ## Combined slice 3+4 state (deployed 2026-09-27, v0.6.0 @ 85f3c92)
   policy); **ADR-0010 Accepted** — heartbeat 60s / STALE 300s / reconcile
   3600s / fleet 86400s / alignment grace 120s / context warnings 70-85-95,

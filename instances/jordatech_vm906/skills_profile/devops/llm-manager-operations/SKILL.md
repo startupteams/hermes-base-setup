@@ -55,6 +55,17 @@ manual release transaction). Do not edit prod files in place.
 4. Run the CURRENT deployment's `deploy-release.sh` (`/opt/llm-manager/current/deploy/deploy-release.sh <tarball>`)
    via `setsid nohup ... > /tmp/deploy-<sha>.log 2>&1 < /dev/null &` (plain
    nohup from a ssh 'bash -c' dies with the session; setsid survives).
+   **EXCEPTION — tooling-changing merges:** when the artifact CHANGES
+   deploy-release.sh itself, invoke the ARTIFACT'S OWN script
+   (`/opt/llm-manager/releases/<new-sha>/deploy/deploy-release.sh`) — the
+   current/deploy path is the OLD tooling until the new release activates, so
+   a new gate would silently not run (hit live 2026-09-29: the Phase-E dep
+   probe never executed because the old script was invoked; fixed by a
+   same-tip drill through the artifact's script). Phase E of the transaction
+   also now RUNS a dependency-import verification (window-4 PR #67): the
+   release venv must import sqlalchemy/alembic/psycopg2/httpx/uvicorn/fastapi
+   before cutover — missing dep = die = pre-activation abort + auto-rollback
+   (closes the window-3 sqlalchemy-gap class; tests/test_release_dep_gate.py).
 5. Poll `tail` of the log via ssh until `==> Release ACCEPTED (<full-sha>)`
    + `healthcheck PASSED`. Note: `pgrep -f deploy-release` matches your OWN
    ssh command line — filter with `pgrep -fl 'deploy-release.sh /tmp'` or
@@ -74,15 +85,26 @@ manual release transaction). Do not edit prod files in place.
 
 ## Staging VM120 (10.0.20.131) — access reality
 
-- NO direct shell for the agent (no root ssh from workstation or VM114; the
+- NO direct SSH shell for the agent (no root ssh from workstation or VM114; the
   CT130 self-hosted runner's `llm-manager-deploy@10.0.20.131` key is the ONLY
-  path, and that user's sudo is wrapper-only: bootstrap/deploy/healthcheck
-  wrappers — arbitrary sudo asks for a password).
+  ssh path, and that user's sudo is wrapper-only: bootstrap/deploy/healthcheck
+  wrappers — arbitrary sudo asks for a password). **This is INTENTIONAL
+  least-privilege design, not a missing key (diagnosed 2026-09-29, window-4
+  plan §F1) — do not "fix" it by widening sudo.**
+- **qga IS available on VM120** (node miam-00135, `qm guest exec 120` — exit 0
+  verified). Window-3's "no shell access" finding was SSH-only; bounded
+  read-only verification (ORM shadow parity, DB counts, settings) works via
+  node-side qga exec with base64-staged scripts. CT130 lives on miam-00133;
+  its `llm-runner` user holds the llm-manager deploy key (`su - llm-runner`).
 - Staging auto-deploys on main push via `deploy-staging.yml`. Verify with
   `curl -sk https://10.0.20.131/healthz` — the git_sha must match main tip.
 - One-shot env toggles go through the `staging-orm-cutover-toggle.yml`
   workflow (workflow_dispatch, value=1/0) — it writes systemd drop-ins,
   daemon-reloads, restarts, and verifies via `systemctl show`.
+- ORM shadow parity PROVEN on staging (window-4 Phase F3): slice-5
+  `orm_hosts_inventory()` == legacy psycopg2 host count; slice-6 gpu_orm
+  imports clean; retention settings 90/730 present; gpu tables empty on
+  staging by design (no GPU collectors target staging).
 - When VM120 access blocks a staging-first validation, prod validation via
   VM114 root + systemd drop-ins is the accepted fallback (documented
   deviation; prod cutover flag is instantly reversible by removing drop-ins).
@@ -210,7 +232,16 @@ manual release transaction). Do not edit prod files in place.
   LlmBase metadata (no-DDL invariant).
 - LiteLLM-owned writes are NEVER absorbed (SpendLogs lives in the separate
   `litellm` database — `SELECT ... FROM "LiteLLM_SpendLogs"` needs
-  `-d litellm`, not `-d llmmanager`).
+  `-d litellm`, not `-d llmmanager`). **Query recipe (window-4 economics):**
+  token/cost columns are `prompt_tokens` / `completion_tokens` / `spend` /
+  `model` / `api_key` (NOT tokens_input/output); `startTime` is
+  case-sensitive and needs full qualification in WHERE:
+  `WHERE "LiteLLM_SpendLogs"."startTime" > now() - interval '7 days'`.
+  Credentials via the pg_app_creds file contract (`PGPW=$(sed -n "s/^PG_PW=//p"
+  /etc/llm-manager/secrets/pg_app_creds)`); spend-by-api_key rollup identifies
+  which consumer (worker key vs master key) spent. 30-day baseline captured
+  2026-09-29: $0.62 total, 99.98% deepseek-v4.1-flash — economics comparison
+  verdict lives in the ACMS economics API, not SpendLogs alone.
 - Parity tests (tests/server_manager/test_orm_parity.py, pgserver embedded):
   - `schema.sql` carries pg_dump ≥17 `\restrict`/`\unrestrict` meta lines —
     strip lines starting with backslash before `cur.execute(schema)`.
