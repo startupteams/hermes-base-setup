@@ -60,3 +60,12 @@ almost never necessary.
 - `systemctl status qemu-guest-agent` "Memory: 3.9G" is cgroup page-cache from
   exec children, NOT a daemon leak (real RSS ~4.5 MB — check `ps -o rss=`).
 - After restarting the guest agent, verify from PVE side with **exec**, not ping.
+- Restarting the guest daemon does NOT clear a QEMU-side exec wedge — the
+  wedge lives in the host chardev handling; only in-guest restart + file-write
+  nudge / self-recovery clears it (proven 2026-09-28). `guest-ping` stayed 500
+  all day while exec/file-write worked; treat ping≠liveness as permanent on
+  this build.
+- SSH key install order when exec is wedged: file-write the (base64-staged)
+  bootstrap script → decode in-guest → sha256-verify → run → THEN use SSH for
+  everything else (guest agent restart per runbook §A3, health checks,
+  release transactions). File-write channel is the most reliable first move.

@@ -53,6 +53,13 @@ manual release transaction). Do not edit prod files in place.
    itself changed, do a same-tip drill first (tooling-mid-flight is unproven).
 8. Verify: `curl -sk https://10.0.20.108/healthz` reports the new git_sha.
 
+**Preflight checksum trap (cost a release cycle 2026-09-28):** the `.sha256`
+file must sit NEXT TO the tarball AND be named `<tarball>.sha256`. The build
+names the sha file after the CONTENT hash, not the tarball — preflight
+`sha256sum -c` then fails and the release aborts. Fix before transfer:
+`mv <content-hash>.sha256 <tarball>.sha256` (edit the single line to point at
+the tarball filename if the manifest lists the content-hash name).
+
 ## CI / merge discipline
 
 - 6 required checks on PRs: secret-scan, syntax, tests, deps, config, db
@@ -91,6 +98,13 @@ manual release transaction). Do not edit prod files in place.
   unreachable → record `last_error`, no state flip on unknown ground truth.
 - Single-replica discipline (TDR-0009): one uvicorn worker; no leader election
   yet. state-sync health vocabulary: PENDING|SYNCING|VERIFIED|STALE|FAILED.
+- Stale failed-provisioning rows: disposition is **SUPERSEDED** (never delete).
+  Admin endpoint marks each failed attempt row SUPERSEDED and links it to the
+  live runtime (5 ERROR rows → live VM124 runtime 56c1b849, 2026-09-28, PR
+  #50). Needs a PG enum migration for the new actual-state value; verify via
+  DB audit-event count, and `expire_all()` after API calls in tests (session
+  caches the pre-update row) — a 404-before-422 test ordering trap means the
+  bad-target test needs an existing row to hit 422.
 
 ## llmmanager ORM migration (TDR-0008) — parity-test patterns
 

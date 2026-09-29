@@ -90,6 +90,29 @@ questions in the handoff." Protocol for overrides:
 - The maintenance-mode nginx conf overlays the tracked `nginx.conf`; any `git checkout` on the VM must restore that file first or checkout is refused. `deploy/common.sh` handles this — keep the pattern if touching release tooling.
 - Never run `alembic downgrade` automatically (plan §29); destructive migrations need human approval + restore testing.
 - Level-2 DB restore is only authorized inside an open release transaction (`transaction.json`); standalone rollback is app-only by design.
+- FastAPI + TestClient infinite-stream hang: an SSE endpoint (`while True` +
+  `is_disconnected()`) never returns through TestClient and hangs the whole
+  suite. Fix in ENDPOINT code, not the test: accept a bounded `max_events`
+  query param; when bounded, exit the generator once the drain target is met
+  without awaiting the next keepalive sleep (a sleep-before-check ordering
+  still hangs when zero events match). Also gives an operational safety cap.
+  ACMS SSE (2026-09-28) uses: semantic allow-list filtering, sequence-ordered
+  durable-log source, `Last-Event-ID` exactly-once resume, `X-Accel-Buffering:
+  no` for nginx.
+- `ALTER TYPE … ADD VALUE IF NOT EXISTS` needs a real migration for any new PG
+  enum value (SUPERSEDED runtime state, migration 0003, 2026-09-28) — SQLite
+  passes without it, so only the PG integration test catches it. Budget
+  gate lessons (PR #28): gate lives in the single authoritative dispatch
+  service (`dispatch_service.py`, `POST /api/v1/dispatch/work/{id}`), not UI/
+  controller layers; unknown cost is UNKNOWN, never coerced to zero;
+  idempotency via `disp-<sha256>` external_task_id; `add_event` takes
+  work_key/assignment_key, not item ids.
+- **Shared SQLite unit DB persists across tests in one run** — state-sensitive
+  suites (economics, attention, dispatch) need the `clean_db` conftest fixture
+  (DELETE FROM all tables) or they see prior tests' rows. Migration-test
+  ordering: tests sharing `/tmp/acms-integration-pgdata` pollute alembic_version
+  — pin exact revisions (`upgrade 0007_work_budgets`, not `head`) and start
+  from `downgrade base` when asserting a specific stamp.
 - Live CT122 layout facts (repo path, container names, allowlist, DNS reality) → see `references/ct122-live-layout.md` before running anything on the box.
 
 ## Related skills

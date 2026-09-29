@@ -44,7 +44,23 @@ the text is delivered.
 
 ## Pitfalls
 
-- **"Send this over Telegram" ≠ find a send tool.** There is no dedicated send-message tool for most platforms — tool_search for 'telegram send document' returns only third-party MCP noise (Zapier Slack/Gmail/etc.). Burning 4+ round-trips hunting for one is the classic failure (2026-09-27). The mechanism IS the MEDIA: tag in your final reply. To confirm the destination is live, read `~/.hermes/profiles/<profile>/channel_directory.json` — `platforms.telegram[]` carries `{id, name, type, thread_id}` for each known chat (the home DM shows as type `dm`); use it to verify the target exists instead of guessing chat IDs.
+- **"Send this over Telegram" ≠ find a send tool — READ THIS SKILL FIRST.**
+  This exact failure recurred 2026-09-28: a full session burned 8+ tool_search
+  round-trips hunting a send tool for a "handoff file here on Telegram" ask,
+  then shipped via a raw Bot API script — while this skill prescribed the
+  one-step answer (MEDIA: tag in the final reply, no tool call at all). When a
+  file-delivery request arrives, the DEFAULT is: write/verify the file, then
+  put `MEDIA:<abs-path>` on its own line in the final reply. Do not tool_search
+  for send mechanisms. There is a `send_message` tool in the codebase
+  (tools/send_message_tool.py, supports `MEDIA:<path>` in message text) but it
+  is NOT wired into this profile's runtime toolset — do not go looking; the tag
+  path needs nothing.
+
+- **Last-resort fallback (gateway path unavailable):** Bot API sendDocument
+  works from terminal — read the active `TELEGRAM_BOT_TOKEN` from
+  `~/.hermes/.env` (uncommented line; never print it), take the chat_id from
+  `channel_directory.json`, POST multipart `sendDocument` with caption. Verify
+  `ok: true` + `message_id` in the response, then delete the helper script.
 - **Prose mentions don't deliver.** The tag must appear as a real `MEDIA:`
   token in the final reply — writing "the file is at /path/file.md" does
   nothing. Conversely, never write `MEDIA:` with a fake path in prose
