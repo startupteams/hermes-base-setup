@@ -85,8 +85,44 @@ questions in the handoff." Protocol for overrides:
   broken/unreviewed-by-CI code, still never touch others' PRs, and still
   deploy only through release.sh with the pre-authorized rollback rule.
 
+## Branch protection + autonomous merge steady state (ACTIVE since 2026-09-29)
+
+The governance model evolved: `main` is now **protected** (PR required; required checks
+`syntax`/`tests`/`secret-scan` from `.github/workflows/ci.yml`; force-push and deletion blocked;
+`enforce_admins=false` so the human admin keeps emergency direct-push). Per the 2026-09-29
+execution plan §15/§16, the authorized workflow is: branch → implement → tests → PR → required
+checks green → self-merge (merge commit) → release.sh deploy. Direct main pushes by AI agents are
+prohibited. gitleaks runs with the default ruleset; test-fixture secrets go in
+`.gitleaksignore` by fingerprint (never a custom `.gitleaks.toml` — a committed config with
+unsupported RE2 syntax breaks the scan on every checkout).
+
+Phase-A-era modules now in the codebase (check before reinventing): `work_creation_guard.py`
+(ADR-0011 Executive-only Work Item creation, `ACMS_EXECUTIVE_AGENT_IDS` env, 403 +
+`WORK_CREATION_REJECTED` audit), `jira_client.py`/`jira_sync.py` (v1 mock-first Jira contract,
+NO create-issue capability, status mutation flag OFF), `session_lifecycle.py` (auto ExecutionSession
+around dispatch, idempotent by a2a_task_id, fail-close on bridge error, zombie reconcile),
+`bridge_discovery.py` (ARM-authoritative endpoint resolution → manual JSON fallback → fail-closed),
+`economics_ingest.py` (GitHub PR facts → pr_outcomes; MERGED never auto-ACCEPTED), `bakeoff.py`
+(budget-gated model comparison). Dispatch live-proof recipe: create work item, POST
+`/api/v1/dispatch/work/{id}` with instruction + `idempotency_key`, verify `execution_sessions` row
+auto-opened, duplicate dispatch returns `duplicate` without a second session.
+
 ## Pitfalls
 
+- **`docker compose up -d acms-app` on CT122 without `ACMS_APP_IMAGE_TAG` recreates the container
+  at `acms-app:local`** (compose default) — an ancient image. ALWAYS pass
+  `ACMS_APP_IMAGE_TAG=<release-sha>` (and `--env-file /opt/acms/.env -f deploy/compose.yaml`) on any
+  manual compose up. Verify identity immediately via `/version` git_sha.
+- **Appending to `/opt/acms/.env` without checking for a trailing newline** glues the new var onto
+  the previous line (this corrupted `ACMS_BRIDGE_TARGETS_JSON` into invalid JSON and 500'd every
+  dispatch). Check/add the newline, then validate any JSON-valued env var parses.
+- **`TelemetryService.record_event` historically dropped `event_type`** (accepted the kwarg, never
+  assigned it → PG NotNullViolation → 500, while SQLite tests passed). Fixed 2026-09-29; the class
+  lesson stands: SQLite-passing tests do not prove PG behavior — the FK/event bugs (PR #30, PR #39)
+  were both live-found on CT122.
+- **Don't hardcode `.venv-acms/bin/alembic` in tests/helpers** — CI has alembic on PATH. Resolve
+  with `shutil.which("alembic") or str(REPO / ".venv-acms" / "bin" / "alembic")` (the pattern now
+  used in all migration/integration test helpers).
 - The maintenance-mode nginx conf overlays the tracked `nginx.conf`; any `git checkout` on the VM must restore that file first or checkout is refused. `deploy/common.sh` handles this — keep the pattern if touching release tooling.
 - Never run `alembic downgrade` automatically (plan §29); destructive migrations need human approval + restore testing.
 - Level-2 DB restore is only authorized inside an open release transaction (`transaction.json`); standalone rollback is app-only by design.
