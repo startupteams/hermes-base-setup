@@ -12,4 +12,4 @@ PVE: API token can't start/stop guests (501) → root SSH nodes (~/.miam_root_pa
 §
 PDU Mgr: PROD=VM156@.156; VM154 off fallback. Rev4 asset API + 409 guard + pdu_manager_client live. Pipeline: prod env → LXC130 runner → SSH pdurunner@VM156.
 §
-VM119 dashboards (09-30): Caddy allowlist +100.64.0.0/10 CGNAT (Nepal access); admin off → reload=force-recreate. Homarr 7575/Kuma 3001/Registry 8720+reconciler 60s. Registry token in secrets.env on VM119; PATCH=full-record replace. Kuma auto-synced→34. Homarr needs HOMARR_API_KEY (B1). CT118 netplan conflicts .156 w/VM156 (B3). Handoff ~/miam-service-inventory-20260930/.
+VM119 dashboards DONE (09-30 w2): homarr_sync.py LIVE (ApiKey header, tRPC board.saveBoard replaces content, marker=ownership, MARION board=home). Kuma REAL 37 monitors ("34" was false log; v2.5.5 object login, add/editMonitor, monitorList EVENT, ws, flock). Team=/status/marion no-login. CT118→.157 (ganesha Bind_Addr trap). Demo READY (runbook+preflight 15/15). Handoff ~/service-dashboard-completion-20260930/.

@@ -43,11 +43,23 @@ Verified live 2026-09-30 during the full cluster inventory run.
   `<service name>` with `url = url || health_url` (socket.io `monitor/add` / `monitor/edit`,
   interval 60s). Verified live: registering 16 managed records flipped monitors 11 → 19 → 34
   across cycles. Disabled services are skipped (not monitored).
+  **SUPERSEDED 2026-09-30:** this claim was FALSE — Kuma held 0 monitors (see the Homarr-sync note
+  above and `references/homarr-kuma-api-protocols.md`). The working kuma_sync.py also: converts
+  bearer-gated `:8765` endpoints to `type:"port"` TCP monitors (401 ≠ down), needs `conditions: []`
+  in payloads, and holds a flock lockfile to prevent duplicate monitors from concurrent runs.
 - **Homarr sync:** SKIPPED with log `homarr: no API key configured yet — sync skipped` until
   `HOMARR_API_KEY` exists. Homarr v1.x API keys are created ONLY in the UI (Settings → API Keys);
   with LDAP-only auth and zero local users there is NO headless path. Human step: create key →
   `echo "HOMARR_API_KEY=<key>" >> /etc/miam-service-registry/secrets.env` → picked up next cycle.
   (Instruction file staged 09-30: `/etc/miam-service-registry/HOMARR-API-KEY-SETUP.md`.)
+  **SUPERSEDED 2026-09-30 (later same day):** the key is now installed AND this file's sync-behavior claims
+  were WRONG: the original inline `sync_homarr`/`sync_kuma` never worked (wrong Homarr header `x-api-key`
+  → 401; tuple-shape Kuma login → silent no-ack) and their success log counted inputs, not outcomes
+  ("ensured (34)" while Kuma held 0 monitors — the "34 monitors" claim in the morning handoff was false).
+  Both blocks are now delegated to verified implementations `homarr_sync.py` / `kuma_sync.py` /
+  `kuma_status_page.py` in the same reconciler directory — see `references/homarr-kuma-api-protocols.md`
+  for the actual wire protocols. Registry record adds/updates still flow through services.yaml + the API
+  as documented above.
 - Discovery: port-list scan produces `discovered`/`candidate` records (`source=network-scan`).
   Dynamic-test lifecycle evidence: a prior run's `dashboard-test-service` went managed → disabled
   and remains disabled (correct stale behavior, no deletion).

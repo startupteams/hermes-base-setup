@@ -80,6 +80,22 @@ Three smoke/healthcheck bugs in a row produced the same symptom — a correct de
 
 A runner/discovery script that finds ZERO input items must hard-fail, not succeed emptily. Real case (2026-09-27): a DB migration runner computed its migrations dir as `os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")` while the script itself lived inside `db/migrations/` — resolving to `db/migrations/migrations`. Every downstream consumer (`apply`, `status`, `verify`) then exited 0 over an empty set: `apply` printed nothing, `verify` printed "verified 0 applied migrations". The silent zero was only caught when a live test tried to SELECT a table the scratch migration should have created.
 
+### 9b. Sync/reconciler success logs that count INPUTS, not outcomes (2026-09-30, cost a session)
+
+A registry→Kuma reconciler logged `kuma: monitors ensured (34)` where 34 = `len(services)` — the count of
+DESIRED inputs — while the target system actually held **zero** monitors (its auth had never worked; every
+write silently failed). An operator session trusted the log and shipped a false "34 monitors reconciled"
+claim in a handoff. The audit trail even had thousands of these "success" events.
+
+Rules for ANY sync/reconcile/ensure tool:
+- Log `created=X updated=Y unchanged=Z errors=E` derived from PER-ITEM ACK/RESULT checks — never a bare
+  count of inputs, and never `len(desired)` in place of an outcome.
+- After the write phase, READ BACK the target's actual state and diff against desired; report the diff.
+- A success log whose number always equals the input count (identical across runs, regardless of target
+  state) is a red flag, not evidence.
+- Silent failures inside client libs (a socket.io emit whose callback never fires) produce NO exception —
+  the only defense is ack timeouts + per-item ok checks + read-back verification.
+
 Rules:
 
 - Self-referencing directory = `os.path.dirname(os.path.abspath(__file__))` itself — appending `/<dirname>/` again double-nests.

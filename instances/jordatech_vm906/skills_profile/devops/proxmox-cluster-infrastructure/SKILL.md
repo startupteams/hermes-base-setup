@@ -844,5 +844,27 @@ See `references/pdm-deployment-and-postinstall.md` for the concrete session reci
 - `references/miam-service-registry.md` — VM119 Service Registry API contract (bearer tokens,
   SHA256-at-rest, PATCH = full-record replace), reconciler→Kuma/Homarr sync behavior, and the
   Homarr API-key human gate.
+- `references/homarr-kuma-api-protocols.md` — VERIFIED wire protocols for Homarr v1.x (ApiKey header,
+  tRPC board.saveBoard replace-semantics) and Uptime Kuma 2.5.5 (object login, add/editMonitor/
+  monitorList-event, websocket transport). Consult BEFORE touching either API — v1 lore and the
+  pre-2026-09-30 reconciler code are wrong on both.
 - `references/tailscale-subnet-access.md` — subnet-router inventory recipe, the unmasqueraded
   CGNAT-source reality that dictates allowlist changes, split-DNS path, and client test ladder.
+
+### PITFALL: "sync succeeded" logs that count inputs, not outcomes (2026-09-30, hit live)
+
+The old reconciler logged `kuma: monitors ensured (34)` where 34 = `len(services)` — a count of DESIRED
+inputs, while the DB actually held ZERO monitors (its login had never worked). A full session trusted that
+log and shipped a false "34 monitors reconciled" claim. Rules for ANY reconciler/sync tool:
+- Log `created=X updated=Y unchanged=Z errors=E` with per-item ack checks — never a bare count of inputs.
+- Verify sync success by READING BACK the target's actual state (DB count / list event) and diffing against
+  desired; report the diff, not the input count.
+- A success log whose number happens to equal the input count is a red flag, not evidence.
+
+### PITFALL: re-IP a guest → grep the guest's SERVICE configs for the old IP too (ganesha Bind_Addr, 2026-09-30)
+
+A CT118 re-IP updated PVE net0 + `/etc/network/interfaces`, but `nfs-ganesha` then FAILED with
+`FATAL: Error binding to V6 interface` (exit 2) — its `/etc/ganesha/ganesha.conf` pinned
+`Bind_Addr = 10.0.20.156;`. The network-config grep (§18-style discovery) missed it. Rule: after any
+re-IP, `grep -rn "<old-ip>" /etc` INSIDE the guest (service configs, daemons, app settings), not just the
+network files, before declaring the change complete.
