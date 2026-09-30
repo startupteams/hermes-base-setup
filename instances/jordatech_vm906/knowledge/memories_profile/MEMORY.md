@@ -10,4 +10,6 @@ LLM Mgr prod d021f70 (W5 09-30, PRs #69-71): fleet one-card bug = _physical_host
 §
 PVE: API token can't start/stop guests (501) → root SSH nodes (~/.miam_root_pass). onboot=1 guests may not auto-start after node power events — verify. Power-cut latency ~25s+. PDU 151:9=miam-00119; 152:3=miam-00135 (live node). cloudimg→VM via qm importdisk node-SSH; cipassword+reboot. LLDAP :17170 GraphQL.
 §
-PDU Mgr: ~/work/pdu-marion-ia-usa-project-framework. PROD=VM156@.156; VM154 off fallback. Rev4: asset API + 409 guard + dry-run plans + pdu_manager_client live (fb01ed1f). Pipeline: prod env → LXC130 runner → SSH pdurunner@VM156.
+PDU Mgr: PROD=VM156@.156; VM154 off fallback. Rev4 asset API + 409 guard + pdu_manager_client live. Pipeline: prod env → LXC130 runner → SSH pdurunner@VM156.
+§
+VM119 dashboards (09-30): Caddy allowlist +100.64.0.0/10 CGNAT (Nepal access); admin off → reload=force-recreate. Homarr 7575/Kuma 3001/Registry 8720+reconciler 60s. Registry token in secrets.env on VM119; PATCH=full-record replace. Kuma auto-synced→34. Homarr needs HOMARR_API_KEY (B1). CT118 netplan conflicts .156 w/VM156 (B3). Handoff ~/miam-service-inventory-20260930/.

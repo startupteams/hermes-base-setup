@@ -68,6 +68,17 @@ two lines: username, password; default `~/.pve_ldap_bot`; cluster endpoint overr
   path is VM-only. For CT internals use SSH/node-shell (`pct exec`), or reach the CT's
   services over the network from a VM that has the tooling (e.g. install
   `postgresql-client` on the app VM and dump remotely instead of exec'ing into the DB CT).
+- **`pct exec <id> -- bash -c "<script>"` breaks on complex scripts** (2026-09-30 inventory
+  sweep): the script text crosses TWO shell layers (node SSH + pct exec), and `$`/backtick/quote
+  escaping that survives both is fragile — batched scans silently returned 59-byte empty outputs
+  with no error. Working pattern: base64 the script → write it to node `/tmp` → run it INSIDE
+  the CT from a file via stdin: `echo <b64> | base64 -d > /tmp/s_<id>.sh && pct exec <id> --
+  bash < /tmp/s_<id>.sh > /tmp/out_<id>.txt 2>&1; cat /tmp/out_<id>.txt`. Also: `pct exec` does
+  NOT reliably forward a piped stdin from the SSH command line — always go through a node-side file.
+- **Long guest commands through qga exec: run detached + result file.** qga exec (CLI or API)
+  blocks ~2 min and times out on sleeps. For "wait N seconds then report" probes, dispatch
+  `nohup bash -c '... > /tmp/result.txt 2>&1 &'` (returns "started" immediately), then poll with
+  a second exec that cats the result file.
 - **Root@pam ticket via `/access/ticket` works from a Python urllib client** when the
   bash+curl path is unavailable (no jq / curl quirks) — same urlencoded form
   (`username=root@pam`), same cookie/CSRF handling, self-signed TLS needs an
@@ -396,6 +407,18 @@ blaming the NIC — MIAM's `0000:00:01.1` AER was an RTX 3080 riser, not the Con
 - **Long-running node work needs a longer pexpect timeout.** `noderun.py`'s CLI defaults to 120 s;
   drive installs/restores through a tiny Python wrapper that imports `noderun.run` and passes
   `timeout=NNN`, or the SSH read loop gives up and returns empty output.
+
+## Caddy container config changes (admin API off — VM119 dashboard pattern)
+
+- If the Caddyfile declares `admin off`, `caddy reload` (including
+  `docker exec <caddy> caddy reload --config /etc/caddy/Caddyfile`) FAILS with
+  `Post "http://localhost:2019/load": connection refused` — there is NO hot-reload path.
+- Single-file bind mount (`./Caddyfile:/etc/caddy/Caddyfile:ro`) pins the inode (same class as
+  the nginx single-file mount trap above): after editing the host file, `docker compose up -d caddy`
+  reports "Running" and does NOTHING — the container keeps serving the OLD config. Always verify
+  with `docker exec <caddy> grep -c <new-token> /etc/caddy/Caddyfile` (expect the edit count).
+- Working change path: edit file → `docker compose up -d --force-recreate caddy` (~2s blip) →
+  grep-verify inside the container → external probe. Keep a dated `.bak` next to the file first.
 
 ## NVIDIA GPU passthrough + driver qualification (GDI)
 
@@ -815,3 +838,11 @@ Use when the GUI shows “No valid subscriptions” or asks to visit `pdm.proxmo
 - Tell the user to hard-refresh the browser (`Ctrl+Shift+R`) because the old bundle may be cached.
 
 See `references/pdm-deployment-and-postinstall.md` for the concrete session recipe and API endpoints used.
+
+## MIAM dashboard stack + Tailscale access references
+
+- `references/miam-service-registry.md` — VM119 Service Registry API contract (bearer tokens,
+  SHA256-at-rest, PATCH = full-record replace), reconciler→Kuma/Homarr sync behavior, and the
+  Homarr API-key human gate.
+- `references/tailscale-subnet-access.md` — subnet-router inventory recipe, the unmasqueraded
+  CGNAT-source reality that dictates allowlist changes, split-DNS path, and client test ladder.
