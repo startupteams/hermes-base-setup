@@ -112,7 +112,8 @@ manual release transaction). Do not edit prod files in place.
 ## CI / merge discipline
 
 - 6 required checks on PRs: secret-scan, syntax, tests, deps, config, db
-  (+ integration-smoke). Merge only when all pass:
+  (+ integration-smoke; `artifact` shows "skipping" on non-main-branch runs —
+  normal). Merge only when all pass:
   `gh pr merge N --squash --delete-branch`.
 - Main pushes trigger `deploy-staging` → VM120 auto-deploy. Verify staging
   picked up the SHA: `curl -sk https://10.0.20.131/healthz`.
@@ -147,8 +148,12 @@ manual release transaction). Do not edit prod files in place.
 - Two-step: `POST /nodes/{node}/qemu/{vmid}/agent/exec` (returns pid) → sleep
   → `GET .../agent/exec-status?pid=<pid>` (out-data/err-data/exitcode).
 - Stage scripts as base64 (≤9KB chunks) written to a temp file, then decoded
-  and run. VM114 qga has a known wedge risk on long execs — keep each exec
+  and run. VM114 qga has a wedge risk on long execs — keep each exec
   minimal, use nohup + log-poll for long operations.
+- **VM114 has root SSH too** (`ssh vm114` alias via `~/.ssh/config.d/`, dedicated
+  key) — simpler than qga for file staging (`scp` tarballs/probes to /tmp) and
+  log polling. Deploy-flow exceptions where qga/node-SSH is still required:
+  see `vm114-qga-ssh-recovery` skill.
 
 ## ARM reconciler semantics (services/reconciliation.py)
 
@@ -182,7 +187,34 @@ manual release transaction). Do not edit prod files in place.
   `tests/server_manager/test_recovery_policy.py` (shared fakes imported from
   test_reconciliation — import `make_runtime` too or NameError).
 
-## llmmanager ORM migration (TDR-0008) — parity-test patterns
+## LLM Manager web UI (window-5 additions — /admin/fleet, /admin/agents)
+
+- **Fleet one-card bug (fixed 2026-09-30, PR #69, prod 439cf8d):** `_physical_host_for_ip()` led with
+  `ip.startswith("10.0.20.16")` which matched EVERY guest .161-.168 → all hosts collapsed onto
+  MIAM-00111 → `_active_hosts()` promoted only VM102 → the dashboard rendered ONE card while 5 served.
+  Second stacked bug: the demotion loop checked `if phys not in promoted` and silently DROPPED a rollback
+  VM sharing the active one's physical host (docstring claimed "demoted to the END"). Fix: exact-IP checks
+  first; demote-but-never-drop via an active_ips set. Lesson: **IP→group mappers must lead with exact
+  matches, every "demote" path must append, and a test must count distinct groups over the real
+  inventory** (`tests/test_fleet_visibility.py`). Verify such bugs by importing the DEPLOYED module on prod
+  and calling the function — code reading kept saying "fine".
+- **Model Fleet page (PR #70, prod 81ca2b3):** `GET /api/fleet` + `/admin/fleet` — inventory-driven (hosts
+  table ∪ legacy VLLM_HOSTS; nothing hard-coded in the UI), operator states SERVING / ONLINE_IDLE /
+  STOPPED_EXPECTED / UNREACHABLE / MISCONFIGURED / STALE (routable model last_verified > 48h; aliases
+  don't mask staleness). Powered-off/unreachable hosts stay visible; "VM powered on" and "model healthy"
+  are separate facts; drill-down per host; PDU hard-power never on this page.
+- **Agent Runtimes UI (PR #71, prod d021f70):** `/admin/agents` list + `/admin/agents/{id}` detail +
+  `/admin/agents/new` wizard in the operator shell (LDAP session). The web app proxies the SM/ARM API
+  (:8300) server-side via the `svc-server-manager` identity from the same 0600 service_tokens file (same
+  VM; token never echoed). Wizard = 6 steps → the EXISTING ARM provisioning path (authority fixed
+  server-side `sprint_execution_context`); external/customer baseline shown as NOT authorized; budget
+  fields point at ACMS (never faked); destroy NOT exposed. Failure classes render actionable errors
+  (503 no-token / 599 network / upstream status) — never raw 500s.
+- **New-app dependency rule:** anything imported at module level of the web app must be in
+  **[project].dependencies** (base), not only `[project.optional-dependencies].dev` — the Dockerfile
+  installs `pip install .` (base only). Hit live: `httpx` was dev-only, so `jira_client` (imported by
+  window-5 gate code) would 500 in prod; PR moved httpx to base deps. Audit imports-vs-deps before
+  releasing any new integration module.
 
 - Slice 1 done (hosts/active_hosts/model_registry reflective models + read
   endpoints). Full 22-table inventory in the 2026-09-28 flight handoff.

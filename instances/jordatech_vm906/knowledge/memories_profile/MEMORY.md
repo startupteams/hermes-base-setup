@@ -1,12 +1,12 @@
 STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
-ACMS prod fa0e0fc (0008): PR#44 merged; ADR-0012 callback LIVE (CT122 .env CALLBACK_TOKEN+BASE_URL; 401/403/404 verified; reconciler closes tasks+orphaned sessions; dedupe ledger in event metadata). PRs #45-47. Rule: after 'gh pr merge --delete-branch' check branch BEFORE committing. Handoff FINAL-HANDOFF-20260929-W3.md
+ACMS prod 404ad54 (0011): Jira kickoff gate LIVE on ALL dispatch paths (AI acct 712020:520fb263-ef0f-425c-a0be-14e9d258917e = startupteamscompany service acct); reconcile+scheduler LIVE (24h UTC, lease). /ui/work/new route-order fix. Work board + PR panel (merged≠accepted). Bootstrap resumable — PATs can't create repos (human gate). W4 callback notes: ADR-0012 watcher LIVE; post-merge branch check rule stands.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
 Jordan: broad server autonomy (break OK — document, fix); questions before NEW plans then full autonomy; deliverable = single .md + Telegram upload.
 §
-LLM Mgr prod 1cea3e4 (PRs #59-66): clone-hygiene HYGIENE_GATE; ORM Slice 5+6 LIVE via ORM_WRITE_CUTOVER=1 drop-ins (sqlalchemy pip-installed into prod venv). orm_write_adapter: UNIQUE(name,host_id) no NULL dedupe → aliases delete-then-insert. gpu_orm: bulk + hour-aligned rollups + prune by sample_id. cmd_rollup start MUST be hour-aligned. CD: RUNNER_TEMP staleness, dist/ untracked, SHORT-sha naming. VM120 no shell access (CT130 runner key only). Awaiting human: Jira token + economics PAT (HUMAN-SETUP files in flight-work dir).
+LLM Mgr prod d021f70 (W5 09-30, PRs #69-71): fleet one-card bug = _physical_host_for_ip .16x prefix collapse + rollback-VM dropped by demotion loop — /admin/fleet + /api/fleet LIVE (6 hosts honest states); /admin/agents list/detail/wizard via svc-server-manager token proxy. Older: clone-hygiene gate; ORM 5+6 via ORM_WRITE_CUTOVER; hour-aligned rollups; CD RUNNER_TEMP/dist/short-sha. VM120: qga works (node miam-00135), wrapper sudo intentional.
 §
 PVE: API token can't start/stop guests (501) → root SSH nodes (~/.miam_root_pass). onboot=1 guests may not auto-start after node power events — verify. Power-cut latency ~25s+. PDU 151:9=miam-00119; 152:3=miam-00135 (live node). cloudimg→VM via qm importdisk node-SSH; cipassword+reboot. LLDAP :17170 GraphQL.
 §

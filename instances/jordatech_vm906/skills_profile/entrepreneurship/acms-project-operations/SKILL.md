@@ -247,6 +247,10 @@ still keep the habit — the guard is local to this machine):**
 - Repo docs: `deploy/README.md` (operator runbook), ADR-0009 + ADR-0010 (both
   Accepted 2026-09-26/27), `docs/HARNESS_CONTROL_MAPPING.md`, `SPRINT.md`
   (current slices), handoffs under `docs/handoffs/`.
+- `references/window5-jira-gate-fleet-ui-2026-09-30.md` — window-5 session
+  detail: fleet one-card root-cause chain, Jira kickoff-gate live facts,
+  Settings-fixture anti-pattern, bootstrap honesty contract, live-UI probe
+  recipes, open items.
 
 ## Test-suite hygiene (conftest patterns — keep using these)
 
@@ -278,7 +282,44 @@ still keep the habit — the guard is local to this machine):**
 - asyncio_mode=auto (pyproject) — plain `async def test_` works; `db` fixture
   pattern: `async for session in get_session(): yield session`.
 
-## Human-credential playbook (learned 2026-09-29)
+- **Settings-attribute-mutation anti-pattern (hit repeatedly 2026-09-30, silently no-ops):** mutating a
+  cached Settings instance's attributes then `get_settings.cache_clear()` DISCARDS the mutation (cache_clear
+  rebuilds from env). Fixtures must set **env vars** (`monkeypatch.setenv("ACMS_JIRA_AI_ACCOUNT_ID", …)`) and
+  `cache_clear()` on entry AND exit — see test_jira_gate.py `gate_env`. Also: patching a module-level
+  `from .x import Y` binding (e.g. `acms.jira_api.JiraClient`) requires patching BOTH the source module and
+  each importing module, or call sites resolve the original.
+- **Jira kickoff gate (window-5, LIVE — never bypass):** `dispatch_service` gates EVERY dispatch path on
+  Jira eligibility BEFORE budget checks (`acms/jira_gate.py`). Verdicts persist on work_items: ELIGIBLE /
+  NOT_LINKED / NOT_READY / ASSIGNEE_MISMATCH / LOCAL_HOLD / JIRA_UNKNOWN. Match the dedicated AI account by
+  immutable **accountId** (`ACMS_JIRA_AI_ACCOUNT_ID` = 712020:520fb263-ef0f-425c-a0be-14e9d258917e — the
+  integration's own service account IS startupteamscompany@gmail.com); never display name or email
+  visibility. Live Jira re-read before decisions; read failure → UNKNOWN → fail-closed for NEW dispatch.
+  Drafts save unlinked but stay visibly non-executable. Persistent PAUSE/STOP holds
+  (`work_runtime_holds`, migration 0010) survive restarts AND polls; only an explicit operator clear
+  removes them; fan-out via Server Manager desired-state (requested ≠ acknowledged tracked honestly).
+- **One reconciliation service (window-5, LIVE):** ALL triggers (manual Check-Jira-now POST
+  `/api/v1/jira/reconcile`, UI `/ui/jira/check-now`, durable in-process scheduler ≤24h UTC w/ catch-up +
+  overdue events) converge on `jira_reconcile.start_reconciliation_run` — durable lease coalesces duplicate
+  clicks into one run; paginated candidate scan PLUS direct re-fetch of every linked issue by immutable id
+  (withdrawal detection); run ledger counts requested-vs-acknowledged. §13.2 mapping lives in
+  `jira_reconcile.py` (In Progress WITHOUT proven ready generation → Attention, never infer authorization;
+  stopped generations never restart on re-polled identical snapshots).
+- **Fine-grained PATs CANNOT create GitHub repositories** (HTTP 403 orgs/{org}/repos — platform limitation,
+  not a scope gap). The product-bootstrap repo adapter (`acms/repo_adapter.py`) fails with
+  `repo-create-forbidden` + exact human-gate guidance and stays resumable (reuse-if-exists; idempotent
+  per-file docs push). Human creates the private repo in the web UI, then the SAME request completes.
+- **Custom session-cookie auth (ACMS UI):** HMAC token = base64url(JSON {"u","r","exp"}) + "." +
+  b64url(hmac-sha256(secret)); cookie `acms_session`; role lowercase `administrator`. In-container live-UI
+  probes mint a token in-process from `ACMS_SESSION_SECRET` (never printed) — used for route/200 checks
+  without LDAP creds. Docker `docker cp` moves files INTO the acms-app container (compose exec can't see CT
+  /tmp).
+- **Window-5 UI/data surfaces:** `/ui/work/board` (5 columns; cards = actionable facts only), work-detail
+  PR panel over economics pr_outcomes (MERGED renders "merged ≠ accepted"), `/ui/products` +
+  `/ui/products/new` idea-review screen (draft/unvalidated stays draft; assumptions never become accepted
+  requirements), `/ui/projects/{id}` tabs, `/ui/usage` (cost-per-accepted NULL when zero, never fabricated;
+  work/agent/model/date filters), `execution_sessions.model_id` captured at open from
+  ACMS_WORKER_MODEL_PROFILE. Jinja gotcha: `col.items` on a dict resolves to the dict's `.items()` METHOD —
+  name board columns `cards` to avoid `len()` type errors.
 
 When a plan authorizes an integration but the credential requires web-UI
 creation (Atlassian API tokens, GitHub fine-grained PATs — NO REST create
@@ -459,8 +500,7 @@ path exists for either):
   `curl -sk https://10.0.20.122/version` shows the new sha.
 - Keep prod == origin/main: after EVERY docs-only merge, run the release too
   (cheap, keeps /version identity checks meaningful).
-- **CI note:** ACMS repo has NO GitHub Actions workflows / required checks —
-  green comes from local pytest only. Run the full suite
+- **CI note (updated 2026-09-30):** ACMS main now HAS branch protection with 3 required checks (syntax / tests / secret-scan) — PRs sit `mergeStateStatus: BLOCKED` until green, `CLEAN` when mergeable (poll `gh pr view N --json mergeStateStatus -q .mergeStateStatus`; `gh-merge` refuses BLOCKED). Still run the full suite
   (`.venv-acms/bin/python -m pytest tests/ -q --ignore=tests/test_postgres_integration.py`)
   before merging. The pgserver integration test fails on this workstation even
   on clean main (env gap, not a regression).
