@@ -444,6 +444,34 @@ Key points (full recipe in `references/gdi-gpu-driver-qualification.md`):
 - `_OSC: platform does not support [AER LTR DPC]` boot lines are benign on AMD Threadripper —
   exclude them from PCIe-fault grep.
 
+### Cloning a golden template into a fleet: offline storage-migrate + template-baked network traps (2026-10-01)
+
+- **Offline (STOPPED-VM) storage-migrate is the cross-CPU-safe way to move a
+  `cpu=host` clone between nodes with different CPUs** — the VM boots on the
+  DESTINATION's CPU. `POST /nodes/{src}/qemu/{id}/migrate` with
+  `{target, targetstorage: <dst-storage>}` (pass `targetstorage` whenever the
+  source storage isn't active on the destination, else 500). 200G thin clones
+  copy allocated blocks in ~5–15 min; run several in parallel. There is no
+  usable cpu-models endpoint (501) — the qmigrate preflight IS the compat
+  check. Track tasks via `/nodes/{src}/tasks/{upid}/status` until
+  `status=="stopped"`; **`exitstatus=="OK"` is the success signal — a poller
+  that treats `stopped` as failure misreads every finished task.**
+- **Check what a template actually BAKES IN before mass-cloning** (read
+  `/etc/netplan/*` + `ls /home` inside one clone after first boot): PVE
+  `ipconfig0: ip=dhcp` is COSMETIC when cloud-init is disabled in the image —
+  the golden template can still pin a STATIC netplan IP, and every clone boots
+  into an instant collision with the live original (ARP flaps between clone
+  MACs; every app-level check still passes). Also verify which runtime the
+  image carries vs what you assume (template had legacy st-agentd only; the
+  Hermes runtime lived only in the manually-provisioned original).
+- Clone re-identification on EVERY clone: machine-id
+  (`systemd-machine-id-setup`; the "from VM UUID" stderr is fine — UUIDs
+  diverge), ssh host keys (`dpkg-reconfigure openssh-server` / `ssh-keygen
+  -A`), hostname, and a rewritten netplan with a VERIFIED-free static IP
+  (ping sweep from a LAN host that isn't ICMP-firewalled + `ip neigh` on that
+  host, MACs cross-checked against each clone's real `net0` MAC). `chmod 600`
+  the netplan file (world-readable YAML = apply-time warning noise).
+
 ### PITFALL: Mellanox CX5 dual-function vfio handoff wedges the card — D3cold, "invalid PCI interrupt pin 255" (2026-09-12, hit on all 3 ring nodes)
 
 Never move BOTH functions of a dual-port ConnectX-5 from mlx5 to vfio (or leave one on

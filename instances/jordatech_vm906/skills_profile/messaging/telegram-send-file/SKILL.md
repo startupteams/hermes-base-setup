@@ -17,16 +17,20 @@ Hermes gateway is connected to Telegram (check `gateway_state.json` → `platfor
    ```
    Abort on hits; never deliver secrets to a cloud API.
 
-2. **Get the token WITHOUT printing it** — it is NOT in config.yaml. It resolves through Hermes' credential store:
-   ```bash
-   cd ~/.hermes/hermes-agent && ./venv/bin/python -c "
-   import sys; sys.path.insert(0, '.')
-   from hermes_cli.config import get_env_value
-   tok = get_env_value('TELEGRAM_BOT_TOKEN')
-   print('present:', bool(tok), 'len:', len(tok) if tok else 0, 'shape-ok:', bool(tok and tok.count(':')==1))"
+2. **Get the token WITHOUT printing it.** Simplest source, verified 2026-10-01: the profile `.env`
+   carries `TELEGRAM_BOT_TOKEN` and `TELEGRAM_HOME_CHANNEL` directly:
+   ```python
+   env = {}
+   for line in open("/home/jordatech/.hermes/profiles/<profile>/.env"):
+       line = line.strip()
+       if line and not line.startswith("#") and "=" in line:
+           k, v = line.split("=", 1)
+           env[k] = v
+   tok, chat_id = env["TELEGRAM_BOT_TOKEN"], env["TELEGRAM_HOME_CHANNEL"]
    ```
-
-3. **Get the chat ID** from `~/.hermes/profiles/<profile>/channel_directory.json` → `platforms.telegram[0].id`. (Home-channel chat ID also appears in the session context header.)
+   Fallback if the profile `.env` lacks it: `hermes_cli.config.get_env_value('TELEGRAM_BOT_TOKEN')`
+   with `sys.path.insert(0, '/home/jordatech/.hermes/hermes-agent')` (credential store resolves it;
+   `print('present:', bool(tok), 'len:', len(tok))` — never the value).
 
 4. **Upload via multipart POST** (stdlib only, token never echoed):
    ```python

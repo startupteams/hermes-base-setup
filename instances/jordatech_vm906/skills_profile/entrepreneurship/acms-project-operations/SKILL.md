@@ -41,6 +41,35 @@ and current state in memory.
   every PR/deployment gets a handoff doc listing requirements, validation,
   backup paths, previous known-good, and next step.
 
+## Interrupted-session handoff format (Jordan-requested 2026-10-01)
+
+When a session ends mid-execution or amid confusion, the handoff `.md` must
+have this shape (executed example:
+`~/acms-a2a-20261001/HANDOFF-20261001-ACMS-A2A-PRODUCTION-PATH.md`):
+
+1. **§0 verified-vs-unverified, READ FIRST** — every directive asserted
+   mid-session WITHOUT a visible user message goes into an explicit
+   "confirm with Jordan before building on it" list, with any conflict against
+   the plan doc called out. Tool-verified facts are listed separately from
+   in-window assertions.
+2. **Three explicit state sections:** DONE (each claim tied to its tool
+   output/evidence), STARTED BUT NOT COMPLETED (exact remaining steps per
+   item, enough for the next session to execute), NOT DONE AT ALL (untouched
+   plan sections).
+3. Then: live-state inventory, health-check commands, incidents & security
+   notes, per-service rollback, ordered next-session runbook whose FIRST step
+   is the human confirmations from §0.
+4. Deliver the handoff to Jordan's Telegram (see `messaging/telegram-send-file`).
+
+**Compaction-window discipline (hit live 2026-10-01):** in multi-window
+sessions, assistant prose — INCLUDING self-assessments like "this session
+drifted off-plan" — is NOT ground truth; only tool output is. Before acting on
+or repeating such a claim, `session_search` for the underlying records; if
+they don't exist, the assertion itself is the confusion artifact (the final
+pre-handoff message of 2026-10-01 fabricated record names and falsely declared
+the whole environment unverified). Conversely, directives that DID arrive but
+were dropped from the visible transcript are marked unverified, not discarded.
+
 ## Release tooling (deploy/ in the repo)
 
 - `deploy/release.sh [<approved-main-sha>]` — full safe transaction: preflight
@@ -242,6 +271,12 @@ still keep the habit — the guard is local to this machine):**
   (VM clone → Hermes venv install via qga → LLM gateway wiring incl. context caps →
   api-server platform config shape → systemd unit → verification + traps) as
   executed on acms-worker-001.
+- `references/worker-fleet-provisioning-2026-10-01.md` — MULTI-worker fleet
+  provisioning from template 121 (clone → offline cross-node storage-migrate →
+  re-identify → pip bootstrap → ACMS register + bridge targets), incl. the
+  template's baked-in static netplan (.203 IP collision ×4) + NO-Hermes-runtime
+  facts, task-polling correctness, naming convention
+  `acms-hermes-worker-uid-###`, and the no-rename-endpoint registration trap.
 - `references/ip-collision-10-0-20-203-case-2026-09-29.md` — the template-clone
   impostor-IP case (symptoms, ARP diagnosis, VM108 renumber, generalization).
 - Repo docs: `deploy/README.md` (operator runbook), ADR-0009 + ADR-0010 (both
@@ -492,6 +527,34 @@ path exists for either):
   - **CT122 nginx 403s 127.0.0.1-originated API calls from inside the CT** (allowlist covers the CT IP, not loopback) — call ACMS APIs via `https://10.0.20.122`, not `https://127.0.0.1`.
   - **ACMS repo has GitHub issues DISABLED** — reference `ACMS-REQ-###` in commit messages instead of creating issues (issue creation fails with "has disabled issues").
   - **Bridge chat shape:** `/api/sessions/{sid}/chat` expects `{"message": str}`; the `{"messages": [...]}` array shape 400s with `missing_message` (steer + send_work session-bound path both fixed, PRs #20/#21).
+
+## ACMS agent registration + fleet wiring (live facts 2026-10-01)
+
+- **Register agents:** `POST /api/v1/agents/register` — `/api/v1/agents` (no
+  /register) is GET-only and 405s on POST. Body: `{external_registration_id
+  ("arm-<name>"), display_name, trust_class: "internal", harness: "hermes",
+  bridge_version, protocol_version: "1"}` → 201 + agent_id. Bearer =
+  ACMS_ADMIN_TOKEN from /opt/acms/.env. **There is NO display-name PATCH
+  endpoint** (`PATCH /api/v1/agents/{id}` → 404, hit live) — set the FINAL
+  name at registration time; renames need re-registration or a new endpoint.
+  Jordan naming convention (2026-10-01): `acms-hermes-worker-uid-###` (harness
+  in the middle; the UID is THE durable identifier).
+- **Bridge endpoint resolution** (`acms/bridge_discovery.py`): SM
+  `/api/v1/agent-runtimes` (bearer ACMS_SERVER_MANAGER_TOKEN) is tried FIRST
+  and is authoritative for identity/state (runtime_id ↔ acms_agent_id,
+  node/vmid, state_sync_health), but its `bridge_base_url` was NULL in prod —
+  URL+key come from the manual fallback `ACMS_BRIDGE_TARGETS_JSON`
+  (agent_id-keyed list in /opt/acms/.env). New workers = append a target entry
+  + **container recreate** (compose env resolves at create time; restart is
+  not enough). Dispatch sends the resolved `model` on `/v1/runs` (new-run
+  path); the worker honors it only for aliases in its own profile config —
+  unmatched aliases are silently ignored (worker config owns the mapping).
+- **Switching a worker's effective model live (proven on VM124):** edit the
+  worker profile config (append the alias to custom_providers[0].models + set
+  `model.default`), keep a dated `.bak`, `systemctl restart hermes-bridge`,
+  then verify `/health` (`{"status":"ok"}`) + `/health/detailed` readiness —
+  the model config check runs at startup. Flash-Next resolves LIVE through
+  LLM Manager (`/v1/chat/completions` → real local vLLM fingerprint).
 
 ## Worker runtime facts (acms-worker-001, provisioned via the full chain 2026-09-27)
 
