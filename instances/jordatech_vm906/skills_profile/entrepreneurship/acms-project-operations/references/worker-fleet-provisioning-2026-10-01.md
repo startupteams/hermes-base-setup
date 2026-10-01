@@ -143,21 +143,22 @@ python3 -m venv /opt/hermes-venv
   (local-preferred / qwen3.8-flash-next / cloud allowed); per-agent or
   per-work-item overrides are optional rows in `model_policies`.
 
-## State at session pause (2026-10-01)
+## State: FLEET COMPLETE (2026-10-01, second session)
 
-- DONE: clones VM125–128 created, offline-migrated, started on targets;
-  machine-id / host keys / hostname / static IPs (.206–.209, verified UP from
-  CT122); pip bootstrap done on all 4 (hermes 0.19.0); VM124 profile patched
-  (flash-next default, bridge healthy after restart).
-- PENDING: hermes profile init + config on the 4 clones; hermes-bridge systemd
-  units + /etc/llm-manager-agent.env; per-worker LLM Manager keys;
-  ACMS bridge-targets entries + container recreate; ACMS agent display-name
-  fix (naming convention) — re-register or add rename endpoint.
-- Fleet action HOLD requested by Jordan at session end pending scope
-  confirmation — finish pending items only after he re-authorizes.
-- Full session handoff with inventory/rollback/runbook:
-  `~/acms-a2a-20261001/HANDOFF-20261001-ACMS-A2A-PRODUCTION-PATH.md`
-  (also delivered to Jordan's Telegram). A2A prod at that pause: ACMS CT122
-  `89fb4e4` (alembic 0012, Release ACCEPTED); ACMS repo main == prod.
-- Phase 12 (Registry + Homarr `/ui` fix) was completed this session —
-  recipe: `references/registry-homarr-url-propagation.md`.
+- ALL PENDING ITEMS DONE: profiles + bridge units + env files on VM125-128;
+  per-worker LLM Manager keys `agent_key_acms_worker_002..005` (0600 on VM114,
+  each proven against LiteLLM); ARM runtime records via direct DB insert
+  (adopted-VM semantics w/ honest ownership_meta — no adopt API exists);
+  ACMS_BRIDGE_TARGETS_JSON 1→5 entries + container RECREATE (pinned image).
+- **aiohttp TRAP (hit on every clone):** the pip bootstrap installs hermes-agent
+  ONLY; the api_server platform needs `pip install aiohttp` + bridge restart or
+  the gateway logs "No adapter available for api_server" and :8402 never
+  listens while systemd shows active. Add to the pre-clone checklist.
+- Naming RESOLVED: ACMS PR #60 added migration 0013 (`legacy_name` + `worker_uid`
+  columns, backfill legacy_name=display_name) + admin-gated
+  `PATCH /api/v1/agents/{agent_id}` (display-only; UUID/external id IMMUTABLE).
+  All 5 renamed live to `acms-hermes-worker-uid-00N`; UUIDs preserved.
+- Final handoff: `~/acms-a2a-20261001/2026-10-01-ACMS-A2A-PRODUCTION-PATH-FINAL-HANDOFF.md`
+  (+ PLAN-OF-RECORD/STEER-LOG/CHECKPOINT-1..3/ROLLBACK/VM123-DISPOSITION).
+- VM123 (stopped duplicate acms-worker-001, miam00111): disposition documented,
+  NOT destroyed — holds static .203 netplan; NEVER start while VM124 owns .203.
