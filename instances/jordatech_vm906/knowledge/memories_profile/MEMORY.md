@@ -1,14 +1,14 @@
 STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
-ACMS prod 404ad54 (0011): Jira kickoff gate on ALL dispatch paths (AI acct 712020:520fb2… = startupteamscompany svc acct); reconcile+scheduler live (24h UTC lease). Work board + PR panel (merged≠accepted). Bootstrap resumable (PATs can't create repos). ADR-0012 watcher live; post-merge branch-check rule stands.
+ACMS prod 89fb4e4 (0012 A2A path, 10-01): envelope+ACK, busy-lock, model policies (sys local-preferred/qwen3.8-flash-next), inbox, artifacts, SSE. Jira kickoff gate on all dispatch (AI acct=startupteamscompany svc). 10-01 Jordan: VM124 STAYS miam00111 (CPU mismatch, cpu=host); 1 worker/inference-node OK; MIAM00100 default only for NEW workers.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
-Jordan: broad server autonomy (break OK — document, fix); questions before NEW plans then full autonomy; deliverable = single .md + Telegram upload.
+Jordan: broad server autonomy (break OK, document+fix); questions before NEW plans; deliverable = single .md + Telegram upload.
 §
 LLM Mgr prod d021f70 (W5 09-30): fleet-card bug (.16x prefix collapse + demotion loop) fixed — /admin/fleet + /api/fleet live; /admin/agents via svc token proxy. VM120: qga works, wrapper sudo intentional. Older: clone-hygiene gate, ORM 5+6 cutover, hour-aligned rollups, CD artifact chain.
 §
-PVE: API token can't start/stop guests (501) → root SSH nodes (~/.miam_root_pass). onboot=1 guests may not auto-start after node power events — verify. Power-cut latency ~25s+. PDU 151:9=miam-00119; 152:3=miam-00135 (live node). cloudimg→VM via qm importdisk node-SSH; cipassword+reboot. LLDAP :17170 GraphQL.
+PVE: API token 501 on start/stop → root SSH nodes (~/.miam_root_pass). PDU 151:9=miam-00119; 152:3=miam-00135. cloudimg→qm importdisk node-SSH. LLDAP :17170 GraphQL.
 §
 PDU Mgr: PROD=VM156@.156; VM154 off fallback. Rev4 asset API + 409 guard + pdu_manager_client live. Pipeline: prod env → LXC130 runner → SSH pdurunner@VM156.
 §
