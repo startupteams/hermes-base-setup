@@ -251,6 +251,12 @@ still keep the habit — the guard is local to this machine):**
   detail: fleet one-card root-cause chain, Jira kickoff-gate live facts,
   Settings-fixture anti-pattern, bootstrap honesty contract, live-UI probe
   recipes, open items.
+- `references/hermes-019-worker-api-surface-2026-10-01.md` — the VERIFIED
+  Hermes 0.19.0 worker api-server surface: /v1/capabilities, run lifecycle
+  (run_id = A2A ACK; statuses TTL'd), run-events SSE payload shapes,
+  /health/detailed + /api/sessions fields (heartbeat sources), and the
+  model_routes caveat (unmatched request-model aliases are silently ignored —
+  worker config owns the mapping).
 
 ## Test-suite hygiene (conftest patterns — keep using these)
 
@@ -264,6 +270,20 @@ still keep the habit — the guard is local to this machine):**
   add its import to that test's `_collect()`** or the new tables escape the
   parity check. Run `tests/test_economics_migration.py`-style pinned-revision
   chain tests for every migration regardless.
+
+- **SQLite batch-mode migration pitfalls (0012 class, hit live 2026-10-01):**
+  (a) `batch.add_column` with an inline `ForeignKey(...)` fails on SQLite with
+  `ValueError: Constraint must have a name` — add the column PLAIN, then add
+  the named FK via `op.create_foreign_key("fk_...", ...)` gated on
+  `op.get_bind().dialect.name != "sqlite"` (SQLite FK enforcement rides the
+  ORM layer / next full head). (b) A column added with `index=True` inside a
+  batch creates `ix_<table>_<col>` — the DOWNGRADE must `op.drop_index` it
+  BEFORE the batch column drops: batch recreates ALL reflected indexes and a
+  dropped-column reference aborts with `no such column: ...`. (c) SQLite has
+  no `ALTER DROP CONSTRAINT` — gate downgrade FK drops on dialect too.
+  Verify with a full `upgrade head` + `downgrade base` cycle on SQLite BEFORE
+  releasing; the release transaction otherwise aborts mid-flight (this cost 5
+  auto-rollback release attempts on 2026-10-01 before the chain ran clean).
 
 - **The shared SQLite unit DB persists rows across tests in one pytest run** —
   any suite asserting event/row COUNTS must use the `clean_db` fixture
@@ -288,6 +308,25 @@ still keep the habit — the guard is local to this machine):**
   `cache_clear()` on entry AND exit — see test_jira_gate.py `gate_env`. Also: patching a module-level
   `from .x import Y` binding (e.g. `acms.jira_api.JiraClient`) requires patching BOTH the source module and
   each importing module, or call sites resolve the original.
+
+- **Async expire-on-commit lazy-load crash (prod-verified 2026-10-01, 4 release
+  auto-rollbacks):** any code that loads ORM rows, then `commit()`s inside a
+  per-row loop (via a service call like `ingest_heartbeat`), and afterwards
+  touches ANY attribute of the pre-loaded rows fires a SYNC lazy load in async
+  context → `telemetry scheduler tick failed` traceback EVERY tick. The
+  release transaction's `app_log_error_scan` (grep `Traceback` in last 100
+  compose-log lines) then fails validation and auto-rollback fires. Fix =
+  snapshot plain values (ids/trust_class) BEFORE any commit, end the read
+  transaction, then one fresh session per unit of work. Corollary: new
+  background loops must be smoke-tested against a REAL PG (or by running the
+  built image against the migrated DB) before release — the SQLite unit suite
+  can't see this class. Debugging recipe when release validation fails on
+  `app logs clean` and docker logs rotated with the rolled-back container:
+  `docker compose stop acms-app` + `ACMS_APP_IMAGE_TAG=<new> compose up -d
+  acms-app` against the CURRENT (migrated) DB, `sleep 8`, then
+  `docker logs acms-acms-app-1 | grep -A20 Traceback` — reproduces the exact
+  prod traceback safely (DB stays migrated; restore app after).
+
 - **Jira kickoff gate (window-5, LIVE — never bypass):** `dispatch_service` gates EVERY dispatch path on
   Jira eligibility BEFORE budget checks (`acms/jira_gate.py`). Verdicts persist on work_items: ELIGIBLE /
   NOT_LINKED / NOT_READY / ASSIGNEE_MISMATCH / LOCAL_HOLD / JIRA_UNKNOWN. Match the dedicated AI account by
