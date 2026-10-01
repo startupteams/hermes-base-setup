@@ -143,6 +143,36 @@ python3 -m venv /opt/hermes-venv
   (local-preferred / qwen3.8-flash-next / cloud allowed); per-agent or
   per-work-item overrides are optional rows in `model_policies`.
 
+## 2026-10-01 Phase A2 UPDATE: golden template REBUILT (VM135) + auto re-identification
+
+- **The NEW golden template is VM 135 `acms-golden-worker-template`** (testthin, template=1,
+  miam00111). VM 121 renamed `am-golden-test-v2-wip-RETIRED`; VM 131 (repaired runtime, NO
+  re-identify unit) renamed `acms-golden-worker-template-v1-no-reidentify` — both kept as
+  rollback. Template 135 adds to everything above: Hermes v0.19.0 venv, aiohttp 3.14.3,
+  `hermes-bridge.service` unit (inactive; env injected at clone time), secret-free `*.TEMPLATE`
+  placeholder files, DHCP netplan, st-agentd disabled, and **`acms-clone-reidentify.service`**
+  (enabled, oneshot, Before=network.target+ssh.service) running
+  `/usr/local/sbin/acms-clone-reidentify.sh`.
+- **NEW defect class proven live:** clones inherit the parent machine-id → systemd-networkd
+  derives an IDENTICAL DHCP client DUID on every clone → **Kea leases the SAME IP to multiple
+  clones simultaneously** (two test clones both held 10.0.20.225; the Kea lease table showed one
+  row while both guests bound the address). This is the automated root cause behind this file's
+  manual re-identification recipe. The unit fixes it at first boot: when machine-id == the
+  reference in `/etc/acms-template-identity`, it chmods+removes `/etc/machine-id` (the file is
+  **444 read-only — systemd-machine-id-setup SILENTLY no-ops otherwise**), regenerates, copies to
+  `/var/lib/dbus/machine-id`, regenerates ALL SSH host keys, writes the new id back to the
+  reference file, and RESTARTS systemd-networkd (required for the DUID to change). Idempotent:
+  second boot is a no-op (ids differ). Clone-proven: VM136 from 135 booted with a unique
+  machine-id, new host-key fingerprint, and its own lease (.227).
+- **Clone-time contract** (the only remaining manual step): inject `/etc/llm-manager-agent.env`
+  (unique LLM_MANAGER_AGENT_KEY + API_SERVER_KEY), fill `/etc/acms-worker-meta.TEMPLATE`,
+  rename/point the Hermes profile, enable+start hermes-bridge, ACMS register +
+  ACMS_BRIDGE_TARGETS_JSON append + container recreate.
+- **VMID collision trap:** `qm clone` fails "config file already exists" when the VMID is taken
+  by a guest on ANOTHER node (VMID 130 = CT130 CI runner on miam-00133; 3 failed attempts before
+  the cluster-wide check). ALWAYS allocate via `/api2/json/cluster/nextid` + cluster resources.
+- **Templates cannot be booted** — repair runtime in a working-copy VM first, then `qm template`.
+
 ## State: FLEET COMPLETE (2026-10-01, second session)
 
 - ALL PENDING ITEMS DONE: profiles + bridge units + env files on VM125-128;
