@@ -1,6 +1,6 @@
 STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
-Gateway v0.3.0 VM114:8202, 7 domains. Registry/monitoring ABSENT — VM119 qga DOWN 10-02 (reset NOT run). Jira mutation fail-closed. Gates: GitHub PAT write; STNA-89 TO START; W7 creds; VM119 qga. Handoffs ~/acms-jira-mcp-20261002/.
+Gateway v0.3.0 VM114:8202, 7 domains; env /etc/miam-mcp-gateway/env. STNA-90 golden loop DONE 10-03. Idea afterhours-ai live; org→mirror sync workflow live. Vercel NOT git-connected (manual deploy). Gates: STNA-89, VM119 qga, ADR-0023, Jira flag, Vercel git. Handoff ~/agentifyme-workflow-20261003/.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
@@ -12,8 +12,6 @@ PVE API: pve_api.py (proxmox skill, LLDAP bot auth) for login/vmconfig/raw; pve_
 §
 PDU Mgr: PROD=VM156@.156; VM154 off fallback. Rev4 asset API + 409 guard. Pipeline: prod env → LXC130 runner → SSH pdurunner@VM156.
 §
-STNA-88: ADF headings = type:heading+attrs.level (heading2 INVALID→400). Unit-green/live-400 class ×3 → live write probe per acceptance run. Hermes approval choice: session|once|always|deny; pre-authorize dispatch tool.
-§
-MCP SDK: dotted tool names need direct registry insert (GatewayTool subclass, run() override + args contextvar); zero-param templates hit SDK walrus bug → statics CONCRETE. `hermes mcp test <name>` = fast probe.
+Jira/ACMS gotchas: clone = re-PUT template ADF (purge hints); eligibility = AI acct + transition 2; IN REVIEW = id 11. ACMS artifacts POST /artifacts (no /api/v1 prefix); /content = JSON {sha256,content}. Dispatch auto-mint needs an AGENT token per worker (CLI mint-agent --acms-agent-id). Claude CLI default opus-4-5 effort=medium (10-03).
 §
 Telegram menu = PROFILE config (gateway unit's HERMES_HOME), not main config.yaml. command_menu priority reorders CORE/PLUGIN cmds only; skills alphabetical Tier-2, trimmed at cap 60. Skill visible: cap 61+ → last slot; plugin cmd → real priority. config set can't grow YAML lists; patch refuses Hermes configs (python write w/ asserts works). Restart: /restart or external systemctl. Handoff: ~/hermes-config-claude-code-20261002/.

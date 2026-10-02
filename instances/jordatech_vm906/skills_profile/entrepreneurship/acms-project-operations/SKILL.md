@@ -436,6 +436,7 @@ gateway-domain env-staging recipe and the per-window acceptance matrices.
   recipes, open items.
 - `references/pve-qga-helper-2026-10-02.md` — the workstation qga helper (pve_qga.py): PVE API login quirks (@pam realm, CSRF on every POST), exec command-as-list, exec-status GET query-string, file-write literal-base64 + sha verify, 596-retry pattern.
 - `references/mcp-server-building-2026-10.md` — BUILDING MCP gateways (miam-mcp-gateway W1–W4 live on VM114; W5–W7 detail now in `references/mcp-gateway-w5-w7-2026-10-02.md`): official SDK quirks (dotted names via Tool subclass, zero-param template walrus bug, contextvar auth propagation, stateless+JSON transport, **`[^/]+` template matching → %2F-encoded slash params**, unknown-arg rejection, approval-gated SENSITIVE_WRITE flow), token model, deploy recipe, verification playbook incl. `hermes mcp test`, and the W4 ARM sandbox substrate (3 live-found clone-provisioning bugs + the DHCP/static-IP collision finding).
+- `references/jira-to-outcome-golden-workflow-2026-10-03.md` — the full STNA-90 golden-loop recipe run live end-to-end: template clone via ADF re-PUT, eligibility moves (assignee + transition 2), Check-Jira→WORK-000019→uid-002→SUCCEEDED→auto-BLUF chain, the dispatch auto-mint agent-token prerequisite (`MCP_ASSIGNMENT_MINT_FAILED` fix via the `mint-agent` CLI), STNA transition-id map (2/4/11), ACMS artifact REST registration + hash-verification envelope, Vercel viewer quirks (NOT git-connected, quoted token, ideas.json file-path doubling), and the org→mirror GitHub sync workflow design.
 - `references/hermes-019-worker-api-surface-2026-10-01.md` — the VERIFIED
   Hermes 0.19.0 worker api-server surface: /v1/capabilities, run lifecycle
   (run_id = A2A ACK; statuses TTL'd), run-events SSE payload shapes,
@@ -532,6 +533,13 @@ gateway-domain env-staging recipe and the per-window acceptance matrices.
   not a scope gap). The product-bootstrap repo adapter (`acms/repo_adapter.py`) fails with
   `repo-create-forbidden` + exact human-gate guidance and stays resumable (reuse-if-exists; idempotent
   per-file docs push). Human creates the private repo in the web UI, then the SAME request completes.
+- **Dispatch auto-mint prerequisite (live 2026-10-03):** ACMS dispatch auto-mints an assignment token
+  via the gateway `/internal/mint-assignment`, which requires that worker to ALREADY have an AGENT
+  token in the gateway store. A newly-registered worker without one ⇒ `MCP_ASSIGNMENT_MINT_FAILED`
+  event at dispatch (dispatch proceeds, but the MCP path is dead for that run). Fix: mint via the
+  gateway CLI from `/opt/mcp-gateway/repo` (`.venv-mcp/bin/python -m mcp_gateway.cli mint-agent
+  <name> --acms-agent-id <uuid>`; raw token printed ONCE → stage to the worker VM 0600 via qga) —
+  full recipe in `references/jira-to-outcome-golden-workflow-2026-10-03.md`.
 - **Custom session-cookie auth (ACMS UI):** HMAC token = base64url(JSON {"u","r","exp"}) + "." +
   b64url(hmac-sha256(secret)); cookie `acms_session`; role lowercase `administrator`. In-container live-UI
   probes mint a token in-process from `ACMS_SESSION_SECRET` (never printed) — used for route/200 checks
