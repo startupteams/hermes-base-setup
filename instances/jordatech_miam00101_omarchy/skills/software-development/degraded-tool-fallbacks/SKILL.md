@@ -115,6 +115,18 @@ and got a real auth response).
 - Hand the user a COPY-PASTE SHELL BLOCK for any step they must run on a remote host, one fenced
   block per machine, ending in an echo marker (`echo VM906-DONE`) so completion is checkable —
   this user runs pasted commands, not prose step lists.
+- Relay files between hosts that cannot reach each other or GitHub directly instead of pushing
+  payloads through chat or base64 chunks: (1) generate a keypair ON the target host via the
+  host-exec channel, (2) authorize that pubkey on a connected hub host (the sandbox can ssh there
+  when its own key is installed), (3) on the hub, clone/pull the repo and `tar czf` the needed
+  subtree, (4) `scp` hub→target and extract. No secrets cross the conversation and no guard-evasion
+  tricks are needed. Also: repo CREATION on GitHub needs gh auth or the web UI — neither is usually
+  available; init locally, commit, and ask the user to create the empty repo, then push over SSH.
+- Verify every host-side file transfer with a content check (`diff`, md5, or file-exists + wc) before reporting it done — a fallback path can 'succeed' while copying a STALE payload (e.g. an scp fallback that reuses a bundle generated before the latest changes lands an older copy). Re-generate the payload at the source rather than reusing an artifact from an earlier attempt.
+- When pushing to a shared branch, expect non-fast-forward rejections: other automated syncs commit
+  to it. Set `git config user.name/user.email` in a fresh clone BEFORE committing or rebasing (a
+  bare clone has no identity and the rebase dies), then `git fetch` + `git rebase origin/<branch>`
+  + push. Check `git log` after fetch to see whether an automated writer is active on the branch.
 
 ## Step 1: try the fix before falling back
 
