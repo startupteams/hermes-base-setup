@@ -353,8 +353,48 @@ still keep the habit — the guard is local to this machine):**
   scratch-DB test recipe, and the re-runnable §41/§42/§44 acceptance-proof
   scripts pattern.
 
+## MCP gateway operations (W1/W2, live 2026-10-02)
+
+The gateway (`miam-mcp-gateway.service` on VM114:8202) is additive; code lives in the ACMS
+repo (`mcp_gateway/`) but deploys by **rsync to `/opt/mcp-gateway/repo/` + systemctl
+restart** — NOT via release.sh. After any gateway change: rsync, `py_compile mcp_gateway/*.py`
+with the gateway venv (`.venv-mcp/bin/python`), restart, check `/health` reports all domains.
+
+- **pyproject/Dockerfile pairing trap (release #1 of gateway code auto-rolled back):**
+  adding a package to pyproject `packages` without adding `COPY <pkg>` to
+  `deploy/Dockerfile` fails the image build AFTER validation passed — CI builds from a
+  full checkout so it cannot catch this. Always update both in the same PR.
+- **New capability domains need a scope-grant migration for EXISTING tokens.** Tokens
+  minted before a domain exists carry only the old scopes; every call to the new domain
+  raises SCOPE_REQUIRED. Fix pattern (PR #80): widen mint defaults AND ship a
+  `grant-scopes` CLI that unions scopes into ACTIVE tokens (metadata-only; hash-only
+  store untouched). Scope widening is metadata — risk classes/roles/approval gates stay.
+- **`/internal/*` machine API** = shared-secret (gateway `MCP_GATEWAY_INTERNAL_TOKEN` ==
+  ACMS `ACMS_MCP_GATEWAY_INTERNAL_TOKEN`), constant-time compare, fail-closed, audited;
+  mounted BEFORE the MCP identity middleware. Mint-assignment returns the raw token
+  EXACTLY ONCE (VM114→CT122 hop is private LAN; worker's only copy). Dispatch auto-mint
+  NEVER blocks dispatch: failure ⇒ `MCP_ASSIGNMENT_MINT_FAILED` event + envelope token null.
+- **In-container probe pattern (3-layer quoting):** hand-writing `python3 -c` through
+  ssh + docker compose exec + nested quotes breaks (hit ~5×); the reliable form is
+  base64-staging the probe: `echo <b64> | base64 -d | docker compose ... exec -T
+  acms-app python3 -`. Inside the container, ACMS APIs must use loopback
+  `http://127.0.0.1:8000` (nginx 403s container-source on the CT IP, even with TLS).
+- **UI probes: use the app's own `issue_token()`, never hand-rolled HMAC.** Hand-minting
+  the session cookie (even with the correct algorithm) renders the login page; importing
+  `from acms.ui.session_auth import issue_token` in-process and setting
+  `Cookie: acms_session=<token>` works first try.
+- **Token hygiene after proof runs:** revoke test assignment tokens immediately
+  (`python -m mcp_gateway.cli revoke <id> <reason>`); keep `list-tokens` as the
+  ground-truth check (0 active assignment tokens between runs).
+- Approval grants are ONE-TIME + TTL-bounded and consumed atomically per exact
+  (agent, capability) — never execute a grant-consumption live proof against a real
+  worker VM (restart_self would actually restart it); prove through the armed state.
+
 ## Pointers
 
+- `references/mcp-gateway-w2-2026-10-02.md` — W2 session detail: llm/runtime adapter
+  architecture decisions, live-found scope/resolver bugs, the live verification matrix
+  (probe→method→result), tool addressing quirks, and the env-wiring/recreate recipe.
 - `references/live-drill-2026-09-26.md` — bug-by-bug drill breakdown, exact
   commands, recovery timeline.
 - `references/hermes-harness-live-tests-2026-09.md` — Hermes 0.17.0 live

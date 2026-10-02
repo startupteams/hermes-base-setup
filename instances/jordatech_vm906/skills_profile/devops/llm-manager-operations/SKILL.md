@@ -27,6 +27,12 @@ manual release transaction). Do not edit prod files in place.
   `~/.sm_service_token_acms` (0600, never echo).
 - Scopes: read = runtime:read, job:read, route:read, usage:read, health:read;
   write = runtime:write, runtime:destroy, job:submit. 401 first, then 403.
+  Empty scope string or `ALL` in the file = full scope set (require_identity
+  in `server_manager/common/auth/service_tokens.py`; constant-time lookup).
+- **The MCP gateway (VM114:8202) is a downstream consumer of this API** — it
+  authenticates to :8300 with the svc-acms identity for its llm.*/runtime.*
+  domains. SM stays the domain authority; do not add gateway-specific routes
+  here, and remember `agent-runtimes` GET needs `runtime:read`.
 - Endpoints (v1.0.0 + 2026-09-28 additions): `/api/v1/agent-runtimes[/{id}]`,
   `/desired-state`, `/agent-runtimes/{id}/reconcile`, `/reconcile`,
   `/agent-runtimes/{id}/state-sync`, `/api/v1/model-routes[/{route}]`,
@@ -41,6 +47,9 @@ manual release transaction). Do not edit prod files in place.
   Self-contained SQL over `get_session_factory("llm")` — deliberately does
   NOT import the web app's `power_view` (layout boundary). ACMS's
   `FacilityPowerClient` consumes this with the SAME svc-acms token.
+- **LLM-Manager web `/api/fleet` is LDAP-session-auth (humans only)** —
+  machine consumers (gateway, ACMS) must use the SM :8300 machine API instead.
+  `/api/hosts/state` is the one unauthenticated web read (verified 200).
 
 ## VM114 release transaction (proven loop)
 
