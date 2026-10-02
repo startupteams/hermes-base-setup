@@ -23,6 +23,13 @@
   invalid_approval_choice). 409 "no pending/active approval" = raced a
   tool-cycle; retry when `approval.request` reappears. For unattended Jira
   intake, pre-authorize the dispatch tool in the worker profile.
+- **Self-merge overrides are SESSION-SCOPED.** The 2026-09-26 and 10-02-morning
+  overrides expired with their sessions. A new continuation session has NO
+  carry-over merge authority: open the PR (CI green + mergeable CLEAN is not a
+  merge authorization), leave it for Jordan, and proceed with work that does
+  not require the merge (e.g. deploying an independent service from the branch
+  when the approved plan authorizes it). Document the non-merge as an honest
+  deviation in the handoff.
 - Recovery for a missed write-back after a fix deploy: the
   `JIRA_HANDOFF_POSTED` exactly-once guard blocks auto-redelivery (correct);
   re-post the identical body through `JiraClient` in-container and record the
@@ -30,6 +37,16 @@
 - Assignment list API (`/api/v1/work/assignments`) renders
   dispatched_at/acknowledged_at/bound_session_id as NULL/"" even though
   dispatch-time writes succeeded — verify via events, not the list repr.
+- **AI-created Jira tickets start at `IDEA/UNVALIDATED`** (Jira project default),
+  NOT at a ready status. Reconciliation honestly reports `not_eligible` with
+  reason "issue status 'IDEA/UNVALIDATED' is not a configured ready state" and
+  creates no work. Moving a ticket out of IDEA/UNVALIDATED is a HARD HUMAN gate
+  (Jordan's rule: no AI status mutation on IDEA/UNVALIDATED tickets) — when a
+  test ticket is needed for an acceptance proof, create it, hand Jordan the key,
+  and route the rest of the proof through OTHER paths until he transitions it.
+- Dispatch of any ACMS Work Item is gated on Jira linkage (`jira_gate.py`,
+  verdict NOT_LINKED → `jira_gate_not_linked`); there is NO bypass env. A
+  work item without a linked Jira issue can only be assigned, never dispatched.
 
 ## Failure class: successful run with zero action
 

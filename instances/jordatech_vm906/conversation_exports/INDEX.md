@@ -1,8 +1,8 @@
 # VM906 Conversation History Index
 
-Exported: 2026-10-02T07:00:32.706668+00:00
+Exported: 2026-10-02T08:00:34.106748+00:00
 
-Sessions: 269 | Messages: 46228
+Sessions: 273 | Messages: 47150
 
 | # | Started | Source | Title | Msgs | File |
 |---|---------|--------|-------|------|------|
@@ -275,3 +275,7 @@ Sessions: 269 | Messages: 46228
 | 267 | 2026-10-02T06:04 | telegram | (untitled) | 137 | sessions/20261002_060404_f5d159.md |
 | 268 | 2026-10-02T06:05 | telegram | (untitled) | 0 | sessions/20261002_060508_e3a42285.md |
 | 269 | 2026-10-02T06:06 | telegram | STNA-88 Recovery Continuation Construction Plan | 364 | sessions/20261002_060639_bb1fb244.md |
+| 270 | 2026-10-02T07:19 | telegram | MCP Gateway Window 1 Deployment Complete | 757 | sessions/20261002_071934_1d1356d2.md |
+| 271 | 2026-10-02T07:24 | subagent | (untitled) | 18 | sessions/20261002_072415_ad7431.md |
+| 272 | 2026-10-02T07:24 | subagent | (untitled) | 108 | sessions/20261002_072416_3bf37e.md |
+| 273 | 2026-10-02T07:53 | telegram | (untitled) | 39 | sessions/20261002_075326_c0d056dd.md |

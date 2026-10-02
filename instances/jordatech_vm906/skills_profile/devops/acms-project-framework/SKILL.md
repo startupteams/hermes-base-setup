@@ -96,6 +96,8 @@ prohibited. gitleaks runs with the default ruleset; test-fixture secrets go in
 `.gitleaksignore` by fingerprint (never a custom `.gitleaks.toml` — a committed config with
 unsupported RE2 syntax breaks the scan on every checkout).
 
+## Module inventory — check before reinventing (updated 2026-10-02)
+
 Phase-A-era modules now in the codebase (check before reinventing): `work_creation_guard.py`
 (ADR-0011 Executive-only Work Item creation, `ACMS_EXECUTIVE_AGENT_IDS` env, 403 +
 `WORK_CREATION_REJECTED` audit), `jira_client.py`/`jira_sync.py` (v1 mock-first Jira contract,
@@ -107,6 +109,13 @@ around dispatch, idempotent by a2a_task_id, fail-close on bridge error, zombie r
 `/api/v1/dispatch/work/{id}` with instruction + `idempotency_key`, verify `execution_sessions` row
 auto-opened, duplicate dispatch returns `duplicate` without a second session.
 
+2026-10-02 additions: `jira_reconcile.py` intake (eligible unlinked issue → exactly-once
+Work/assignment/dispatch, durable per-issue outcomes, PRs #75/#76), `mcp_gateway/`
+(top-level package — internal MCP gateway, separate systemd service on VM114; NOT mounted
+in the ACMS app; see the acms-project-operations skill's `references/mcp-server-building-2026-10.md`
+for the build/deploy pattern). Dispatch is Jira-gate-gated (`jira_gate.py` verdicts persist
+on work_items; NOT_LINKED blocks dispatch with no bypass env).
+
 ## Pitfalls
 
 - **`docker compose up -d acms-app` on CT122 without `ACMS_APP_IMAGE_TAG` recreates the container
@@ -116,6 +125,11 @@ auto-opened, duplicate dispatch returns `duplicate` without a second session.
 - **Appending to `/opt/acms/.env` without checking for a trailing newline** glues the new var onto
   the previous line (this corrupted `ACMS_BRIDGE_TARGETS_JSON` into invalid JSON and 500'd every
   dispatch). Check/add the newline, then validate any JSON-valued env var parses.
+- **Multi-layer nested-quote mangling (hit repeatedly 2026-10-02):** shell one-liners quoted as
+  `ssh host "… python3 -c \"…\" …"` lose inner quotes by the third layer (workstation → ssh →
+  ssh → python) and produce phantom SyntaxErrors with scrambled strings. For anything with
+  nested quoting, base64-stage a script or scp a file, then run it — don't fight the quotes.
+  (Recurring class: also bit the 2026-09-29 QGA bootstrap work.)
 - **`TelemetryService.record_event` historically dropped `event_type`** (accepted the kwarg, never
   assigned it → PG NotNullViolation → 500, while SQLite tests passed). Fixed 2026-09-29; the class
   lesson stands: SQLite-passing tests do not prove PG behavior — the FK/event bugs (PR #30, PR #39)

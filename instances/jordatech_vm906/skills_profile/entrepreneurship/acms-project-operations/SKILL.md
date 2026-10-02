@@ -379,6 +379,8 @@ still keep the habit — the guard is local to this machine):**
   detail: fleet one-card root-cause chain, Jira kickoff-gate live facts,
   Settings-fixture anti-pattern, bootstrap honesty contract, live-UI probe
   recipes, open items.
+- `references/pve-qga-helper-2026-10-02.md` — the workstation qga helper (pve_qga.py): PVE API login quirks (@pam realm, CSRF on every POST), exec command-as-list, exec-status GET query-string, file-write literal-base64 + sha verify, 596-retry pattern.
+- `references/mcp-server-building-2026-10.md` — BUILDING MCP gateways (miam-mcp-gateway W1 live on VM114): official SDK quirks (dotted names via Tool subclass, zero-param template walrus bug, contextvar auth propagation, stateless+JSON transport, error-surface shapes), token model, deploy recipe, verification playbook incl. `hermes mcp test`.
 - `references/hermes-019-worker-api-surface-2026-10-01.md` — the VERIFIED
   Hermes 0.19.0 worker api-server surface: /v1/capabilities, run lifecycle
   (run_id = A2A ACK; statuses TTL'd), run-events SSE payload shapes,
