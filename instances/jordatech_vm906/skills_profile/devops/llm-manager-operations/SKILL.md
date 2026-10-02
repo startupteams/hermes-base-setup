@@ -346,6 +346,22 @@ manual release transaction). Do not edit prod files in place.
 
 ## Pointers
 
+- **W4.1 sandbox DHCP isolation (2026-10-02, PRs #80-#89, prod 42099fd0):** sandbox network
+  identity = SM-managed Kea reservations (`server_manager/agent_runtime_manager/services/
+  sandbox_network.py`), pool `SERVER_MANAGER_SANDBOX_DHCP_RANGE` default .222-.249; gate flag
+  `SERVER_MANAGER_SANDBOX_NETWORK_ENABLED=1` (drop-in on server-manager-api) — default 0 = sandbox
+  provisioning BLOCKED. Provisioning order: clone → configure (pinned `bc:24:11:*` MAC via
+  generate_mac) → SANDBOX_DHCP_RESERVE (Kea reservation BEFORE any boot) → start → wait_for_ip →
+  hygiene. DELETE /agent-runtimes releases the reservation (audited). Live-found traps:
+  (a) PVE assigns a NEW random MAC at START when net0 has none — always pin explicitly;
+  (b) OPNsense Kea UI path is `/ui/kea/dhcp/v4`; (c) OPNsense login page can serve a JS-shell
+  without the hidden csrf pair until the cookie-test handshake completes — retry ~24s;
+  (d) Kea `match-client-id=1` makes hw-address reservations IGNORED for systemd-networkd guests
+  (DUID client-ids) — the sandbox pool requires match-client-id=0, and the set/subnet API
+  silently no-ops that field (flip it via config.xml restore only); (e) PVE DELETE with a form
+  body 501s ("Unexpected content") — params must be query string; (f) the ARM default template
+  is now golden VM135 (VM121 is RETIRED with a static .203 netplan — cloning it self-assigns .203).
+  Secret: `/etc/llm-manager/secrets/sandbox_network` (`OPNSENSE_PASSWORD=`), 0600.
 - ACMS counterpart skill: `acms-project-operations` (CT122 release.sh, UI).
 - PDU: `pdu-manager-vm154`; legacy AgentManager: `agent-manager-vm114`
   (superseded — see parity matrix + TDR-0010 in this repo's docs/).
