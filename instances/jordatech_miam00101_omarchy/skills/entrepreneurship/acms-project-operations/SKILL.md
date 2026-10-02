@@ -353,16 +353,27 @@ still keep the habit — the guard is local to this machine):**
   scratch-DB test recipe, and the re-runnable §41/§42/§44 acceptance-proof
   scripts pattern.
 
-## MCP gateway operations (W1–W4, live 2026-10-02)
+## MCP gateway operations (W1–W7, live 2026-10-02)
 
 The gateway (`miam-mcp-gateway.service` on VM114:8202) is additive; code lives in the ACMS
 repo (`mcp_gateway/`) but deploys by **rsync to `/opt/mcp-gateway/repo/` + systemctl
 restart** — NOT via release.sh (preserve the gateway's own `.venv-mcp`). After any gateway
 change: rsync (exclude `.git .venv-mcp __pycache__ *.pyc acms.db dist .hermes`), restart,
-check `/health` reports all expected domains (currently 5: acms/llm/runtime/github/proxmox).
-rsync-with-delete does NOT delete a path that only exists remotely when the local tree also
-has the same dir — verify new-domain code markers (`grep -c <new-symbol>` on VM114) to prove
-deployed code == main tip.
+check `/health` reports the expected domains (7 LIVE: acms/llm/runtime/github/proxmox/power/jira;
+registry+monitoring code deployed but domains ABSENT until creds staged — absent-domain is the
+designed health behavior, not an error). rsync-with-delete does NOT delete a path that only
+exists remotely when the local tree also has the same dir — verify new-domain code markers
+(`grep -c <new-symbol>` on VM114) to prove deployed code == main tip.
+
+W5–W7 additions (2026-10-02): power (`pdu.*/power.*` via SM), jira (gateway-held credential,
+assignment-scoped issue-key enforcement, plan §28 transition policy enforced IN THE GATEWAY,
+global mutation flag fail-closed), registry/monitoring (read-only; creds pending VM119 qga
+recovery). A "merged + rsynced" window is NOT closed until live probes + evidence + handoff
+exist — W5 opened exactly in that half-done state. Live-found defect classes (SM `totals`
+contract drift, CLI scope hardcode, missing-error-import NameError, wrong endpoint path,
+client timeout vs fan-out read, Kuma 0/1 truthiness, `self.registry` name collision with
+PolicyRegistry) are detailed in `references/mcp-gateway-w5-w7-2026-10-02.md`, alongside the
+gateway-domain env-staging recipe and the per-window acceptance matrices.
 
 - **pyproject/Dockerfile pairing trap (release #1 of gateway code auto-rolled back):**
   adding a package to pyproject `packages` without adding `COPY <pkg>` to
@@ -424,7 +435,8 @@ deployed code == main tip.
   Settings-fixture anti-pattern, bootstrap honesty contract, live-UI probe
   recipes, open items.
 - `references/pve-qga-helper-2026-10-02.md` — the workstation qga helper (pve_qga.py): PVE API login quirks (@pam realm, CSRF on every POST), exec command-as-list, exec-status GET query-string, file-write literal-base64 + sha verify, 596-retry pattern.
-- `references/mcp-server-building-2026-10.md` — BUILDING MCP gateways (miam-mcp-gateway W1–W4 live on VM114, 5 domains): official SDK quirks (dotted names via Tool subclass, zero-param template walrus bug, contextvar auth propagation, stateless+JSON transport, **`[^/]+` template matching → %2F-encoded slash params**, unknown-arg rejection, approval-gated SENSITIVE_WRITE flow), token model, deploy recipe, verification playbook incl. `hermes mcp test`, and the W4 ARM sandbox substrate (3 live-found clone-provisioning bugs + the DHCP/static-IP collision finding).
+- `references/mcp-server-building-2026-10.md` — BUILDING MCP gateways (miam-mcp-gateway W1–W4 live on VM114; W5–W7 detail now in `references/mcp-gateway-w5-w7-2026-10-02.md`): official SDK quirks (dotted names via Tool subclass, zero-param template walrus bug, contextvar auth propagation, stateless+JSON transport, **`[^/]+` template matching → %2F-encoded slash params**, unknown-arg rejection, approval-gated SENSITIVE_WRITE flow), token model, deploy recipe, verification playbook incl. `hermes mcp test`, and the W4 ARM sandbox substrate (3 live-found clone-provisioning bugs + the DHCP/static-IP collision finding).
+- `references/jira-to-outcome-golden-workflow-2026-10-03.md` — the full STNA-90 golden-loop recipe run live end-to-end: template clone via ADF re-PUT, eligibility moves (assignee + transition 2), Check-Jira→WORK-000019→uid-002→SUCCEEDED→auto-BLUF chain, the dispatch auto-mint agent-token prerequisite (`MCP_ASSIGNMENT_MINT_FAILED` fix via the `mint-agent` CLI), STNA transition-id map (2/4/11), ACMS artifact REST registration + hash-verification envelope, Vercel viewer quirks (NOT git-connected, quoted token, ideas.json file-path doubling), and the org→mirror GitHub sync workflow design.
 - `references/hermes-019-worker-api-surface-2026-10-01.md` — the VERIFIED
   Hermes 0.19.0 worker api-server surface: /v1/capabilities, run lifecycle
   (run_id = A2A ACK; statuses TTL'd), run-events SSE payload shapes,
@@ -521,6 +533,13 @@ deployed code == main tip.
   not a scope gap). The product-bootstrap repo adapter (`acms/repo_adapter.py`) fails with
   `repo-create-forbidden` + exact human-gate guidance and stays resumable (reuse-if-exists; idempotent
   per-file docs push). Human creates the private repo in the web UI, then the SAME request completes.
+- **Dispatch auto-mint prerequisite (live 2026-10-03):** ACMS dispatch auto-mints an assignment token
+  via the gateway `/internal/mint-assignment`, which requires that worker to ALREADY have an AGENT
+  token in the gateway store. A newly-registered worker without one ⇒ `MCP_ASSIGNMENT_MINT_FAILED`
+  event at dispatch (dispatch proceeds, but the MCP path is dead for that run). Fix: mint via the
+  gateway CLI from `/opt/mcp-gateway/repo` (`.venv-mcp/bin/python -m mcp_gateway.cli mint-agent
+  <name> --acms-agent-id <uuid>`; raw token printed ONCE → stage to the worker VM 0600 via qga) —
+  full recipe in `references/jira-to-outcome-golden-workflow-2026-10-03.md`.
 - **Custom session-cookie auth (ACMS UI):** HMAC token = base64url(JSON {"u","r","exp"}) + "." +
   b64url(hmac-sha256(secret)); cookie `acms_session`; role lowercase `administrator`. In-container live-UI
   probes mint a token in-process from `ACMS_SESSION_SECRET` (never printed) — used for route/200 checks

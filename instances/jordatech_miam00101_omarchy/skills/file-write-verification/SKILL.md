@@ -50,6 +50,39 @@ del lines[179:181]  # drop duplicated fragment
 p.write_text("\n".join(lines) + "\n")
 ```
 
+## Guard-refused targets: Hermes config files (2026-10-02)
+
+The patch/write_file tools hard-refuse Hermes `config.yaml` paths ("Agent cannot modify
+security-sensitive configuration") — no override flag. `hermes config set` cannot express
+nested LIST config either: its `_set_nested` never grows lists, so a numeric path on a
+missing list silently writes a dict that list-reading code ignores. When a task requires
+nested-list config edits (e.g. Telegram `command_menu.priority`), the working path is a
+Python write — which requires EXPLICIT user consent (the approval system blocks scripted
+writes otherwise; a refusal is not permission to retry silently):
+
+1. `shutil.copy2` backup next to the target
+2. Line-anchored pre-condition asserts (see pitfall below)
+3. Write, then `yaml.safe_load` verification of the intended sub-block
+4. **Deep-compare against the backup** — parse both, assert the original key-set plus
+   expected additions equals the new key-set and no original key changed value; this
+   catches real corruption AND false-alarm assertion failures
+
+```python
+oc, cc = yaml.safe_load(bak.read_text()), yaml.safe_load(p.read_text())
+assert set(oc) | {'platforms'} == set(cc)           # only expected additions
+assert [k for k in oc if oc[k] != cc.get(k)] == []  # every original key unchanged
+```
+
+This pattern rescued a write whose only "failure" was a hardcoded `_config_version == 23`
+assertion — the profile file legitimately sits at version 30. Compare against the backup,
+never against values that differ between config files.
+
+## Anchor existence checks with re.M
+
+Substring checks like `'platforms:' in text` false-positive on NESTED keys of the same
+name (`display.platforms:`). Anchor top-level key checks:
+`re.search(r'^platforms:', text, re.M)`.
+
 ## sed -i with quoted replacements silently mangles quoting
 
 Multi-site `sed -i 's|…\$(dirname "\$0")…|…|'` edits on a deploy script produced

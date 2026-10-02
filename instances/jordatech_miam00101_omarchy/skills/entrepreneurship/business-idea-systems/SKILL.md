@@ -1,7 +1,7 @@
 ---
 name: business-idea-systems
 description: "Build and operate business-idea repositories, validation workflows, and lightweight idea-viewer apps."
-version: 1.0.0
+version: 1.1.0
 author: c01entrepreneur_bot
 license: MIT
 metadata:
@@ -121,6 +121,49 @@ When adding or changing an idea in `business_idea_generator`, treat `data/` as a
 When converting business ideas into requirements and test cases, use the `jordatech/requirements_management_obsidian` template pattern: keep Obsidian wikilinks intact, avoid `.obsidian/` edits unless requested, preserve fixed filenames when instructed, and generate concise system/software requirement plus system/software test-case examples from each idea's persona and pain. When the user wants those examples added into both `business_ideas` and `business_idea_generator`, copy the checked-in `BUSINESS_IDEA_REQUIREMENT_EXAMPLES.md` into the source repo root and the viewer repo `data/` snapshot, add a founder-visible `/requirements-examples` page in the Next.js app plus nav links, then rebuild, deploy, and verify the protected Vercel alias still returns `401` without credentials. See `references/business-ideas-to-obsidian-requirements.md`.
 
 When Jordan asks to create or update Disciplined Entrepreneurship Canvas / One-Page Marketing Plan artifacts from venture briefs, framework dependencies, templates, UX audits, or advisor roleplay, produce durable `.xlsx` / `.docx` / `.md` files rather than only chat analysis. Use Bill Aulet / Allan Dib / Giff Constable / Paul Cheek as distinct roundtable personas when requested; run the requested staged debate, preserve source traceability, add evidence-map sheets for UX audits, and verify generated Office files by reopening them. For Google Drive UX audit folders, recurse through subfolders and resolve Drive shortcuts before exporting Docs/Sheets/PDFs. See `references/de-canvas-opmp-advisor-roundtable.md`.
+
+## Live Findings from the 2026-10-03 Daily-Idea Run (AfterHours AI, idea #94)
+
+- **DeepAPI is the working web-research path** (env `~/.deepapi/env`, key `DEEPAPI_API_KEY`):
+  `POST $DEEPAPI_API_BASE_URL/v1/search/web` REQUIRES a unique `Idempotency-Key` header per
+  call and uses `query`/`maxResults` (NOT `prompt`) in the body; results live at
+  `output[].results[]` with `title`+`url`. Scraping = `POST /v1/scrape/website` with
+  `{url}` → `output[].text`. Run 3–5 differently-worded searches for pricing/competitor/
+  demand grounding before writing a brief; put the real URLs in `source_urls`.
+- **ideas.json `file` field convention: `ideas/<slug>.md` (relative to `data/`)** — writing
+  `data/ideas/<slug>.md` doubles the path and `npm run build` fails on the dynamic
+  `[slug]` page (ENOENT `data/data/ideas/...`). JSON validation does NOT catch this; only
+  the build does. Always rebuild (`npm run build`) after index changes.
+- **The protected viewer's Vercel project is NOT git-connected** (verified 2026-10-03:
+  last prod deploy was 89 days old while main had newer commits). Pushes do NOT
+  auto-deploy. Manual prod deploy from the repo checkout:
+  `vercel deploy --prod --yes --token <vcp_...>` (~40s, auto-aliased to
+  businessideagenerator-three.vercel.app). Reconnect Git integration to restore
+  push-to-deploy. The VERCEL_TOKEN in `~/.bashrc` is QUOTED — `tr -d '"'` before
+  passing to `--token` (the CLI errors on embedded quotes).
+- **Basic Auth creds are NOT retrievable via `vercel env pull`** — sensitive values come
+  back as empty strings. The working `jordan:<pass>` pair is recovered from prior session
+  archives (session_search) and must be staged to a 0600 file, never echoed or committed.
+- **ideas.json is build-time input, NOT a served route** — `/data/ideas.json` 404s on prod
+  (good: private data is not publicly fetchable). Verify deployed content by curling the
+  idea page authed and grepping for distinctive phrases from the repo markdown.
+- **First-10-clients validator entry format (from the validator regex):** each of the 10
+  entries must be a NUMBERED list item with the link FIRST — `1. **[Name](url)** —
+  **Specific need:** ... **How to contact:** ...` — bold-link at the start of the line,
+  then the literal phrases `Specific need:` and `How to contact:`. Unnumbered or
+  link-after-prose entries fail the validator (sections/entries/needs/contacts all
+  counted separately). Most pre-existing ideas score 0 on it — that's their pre-existing
+  state; don't "fix" the whole portfolio in an idea-adding run.
+- **Git direction (Jordan-directed 2026-10-03):** `startupteams/business_idea_generator`
+  (org, source) → `jordatech/business_idea_generator` (personal, deploy mirror). A one-way
+  sync workflow now exists in the mirror (`.github/workflows/sync-from-org-source.yml`):
+  dispatch/poll triggers, already-synced no-op via merge-base check, FF when aligned,
+  sync-branch+PR when diverged, `synced/<sha>` marker tags, no reverse sync. Daily ideas
+  land on the mirror; the first mirror→org convergence was a one-time FF (flagged to Jordan).
+- **Pre-existing branch-name collision trap:** `git checkout -b AGENT_STEA004_ENTREPRENEUR`
+  fails silently-noisy when the branch already exists and the commit lands on main. Run
+  `git branch --show-current` BEFORE committing (this bit the 10-03 run; the pre-push
+  guard caught the main push and required the audited override).
 
 ## Idea Data Access Pattern
 
