@@ -161,8 +161,3 @@ Idempotency persists across restarts (/var/lib/pdu-control/idempotency.json).
 - **⚠️ 152:3 = miam-00135 = a LIVE Proxmox node** (hosts VM114 LLM-Manager, VM120, CT122 ACMS). Never dispatch "wiring probes" to 152:3. If a power-cycle of it ever happens accidentally: PVE `onboot=1` guests did NOT auto-start (twice) — verify guest states after any node power event, and ACMS containers need a manual `docker compose --env-file /opt/acms/.env -f /opt/acms/repo/deploy/compose.yaml up -d` re-raise. Recovery verified 2026-09-27 (TDR-0002).
 - **Pre-dispatch discipline:** quote the exact `ip + outlet + label` triple from `config/examples/config.example.json` in the dispatch reason; verify target identity against the authoritative config BEFORE the 202, and prefer the least-consequential asset for any probe.
 - Driving actuation via the emergency session: curl with cookie jar (`-c/-b`), `POST /api/action` JSON, then verify via in-process `read_state` (the app's venv python) — job polling from an emergency session 401s on `/api/v1`.
-
-## Preserved from VM154-era MIAM instance (2026-10-02)
-
-- MIAM-00151 outlet 4: unlabeled, unprotected, no mapped asset — verified safe
-  for live ON/OFF tests (confirmed again before each destructive test).

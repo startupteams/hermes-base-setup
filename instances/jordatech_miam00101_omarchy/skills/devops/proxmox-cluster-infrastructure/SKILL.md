@@ -896,13 +896,3 @@ A CT118 re-IP updated PVE net0 + `/etc/network/interfaces`, but `nfs-ganesha` th
 `Bind_Addr = 10.0.20.156;`. The network-config grep (§18-style discovery) missed it. Rule: after any
 re-IP, `grep -rn "<old-ip>" /etc` INSIDE the guest (service configs, daemons, app settings), not just the
 network files, before declaring the change complete.
-## LLDAP: password setting, memberOf, and default ACLs (v0.6.x realities — from MIAM-00101 instance, preserved 2026-10-02)
-
-- **LLDAP does not expose `memberOf` over LDAP** (groups are virtual, GraphQL-only). App code
-  doing role lookup must search `ou=groups,<base>` with `(member=<userDN>)` and read `cn` —
-  filtering user attributes for `memberOf` returns ABSENT and silently breaks login→role
-  mapping ("no role assigned" errors with a valid password).
-- GraphQL arg shapes differ by version: `createGroup(name: ...)` returns `Group { id }` (not
-  `ok`); `addUserToGroup(userId:, groupId:)` returns `Success { ok }`;
-  `createUser(user: CreateUserInput!)` takes a variable, not inline args. Introspect before
-  scripting.

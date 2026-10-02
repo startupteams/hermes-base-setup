@@ -247,5 +247,3 @@ orchestration. Full promotion detail: `references/flashnext-promotion-20260925.m
    (`systemctl cat vllm.service`) ON THE SOURCE GUEST (a copy-pasted script once ran on VM114 —
    "No files found" was the tell), note the preset id + revision id, and write the runbook
    (gate → stop container → qm stop → restore desired states → qm start → verify) into the handoff.
-
-- CPU lanes: dense models can be CPU-viable serving; check the arch (dense vs MoE) before proposing CPU lanes. (from MIAM-00101 instance, preserved 2026-10-02)
