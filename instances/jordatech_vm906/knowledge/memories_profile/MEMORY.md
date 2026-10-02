@@ -1,6 +1,6 @@
 STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
-ACMS prod 07043f1 (alembic 0017). STNA-88 gate PASSED. MCP W1: gateway LIVE VM114:8202 — PR #77 open CI green awaiting Jordan; stea-004/uid-001/uid-005 tokens minted; golden §20 steps 1-3+5-8 proven from VM124; STNA-89 (id 10995) awaits human TO START. W2 = LLM/runtime adapter + capability card + auto-mint.
+Gateway v0.3.0 LIVE VM114:8202 — 5 domains (acms/llm/runtime/github/proxmox) == ACMS main b0d2970. LLM Mgr VM114 = 061e497 (ARM alembic 0004_sandbox_ttl; sandbox class + TTL sweep + extend-ttl live). W3+W4 deployed+validated. HUMAN GATES: (1) CRITICAL — Kea leases collide with worker statics (sandbox DHCP grabbed worker-001's .203; VM destroyed, worker unharmed); sandbox create paused until Jordan picks Kea-reservations / sandbox DHCP class / gateway IP pool; (2) GitHub PAT Contents:write for github.* writes (403 now); (3) STNA-89 TO START (human gate).
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §

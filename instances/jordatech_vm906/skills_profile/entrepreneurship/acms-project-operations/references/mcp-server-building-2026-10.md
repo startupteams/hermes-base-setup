@@ -2,10 +2,11 @@
 
 Class-level guidance for BUILDING (not just consuming) MCP servers in the MARION
 estate: SDK integration patterns, per-request auth propagation, policy/audit
-spines, and the deployment recipe proven live on VM114 (2026-10-02, Window 1,
-`miam-mcp-gateway` on :8202). For consuming MCP servers from Hermes, see the
-bundled `native-mcp` skill; for the deployed gateway's API surface, see the ACMS
-repo (`deploy/mcp-gateway/README.md`, PR #77, ADRs 0019–0022).
+spines, and the deployment recipe proven live on VM114 (2026-10-02, Windows
+1–4: `miam-mcp-gateway` on :8202 with domains acms/llm/runtime/github/proxmox).
+For consuming MCP servers from Hermes, see the bundled `native-mcp` skill; for
+the deployed gateway's API surface, see the ACMS repo (`deploy/mcp-gateway/README.md`,
+PRs #77/#81/#83, ADRs 0019–0023).
 
 ## Authority/context (STEA-004 estate)
 
@@ -127,3 +128,90 @@ they bind exactly one Work UID (+ project/Jira/repo) with a short TTL.
   base64-staged scripts or scp for anything with nested quotes.
 - Never put raw tokens in audit rows, logs, or handoffs (hash-only); the CLI's
   mint output is the single exposure point by design.
+
+## W3+W4 additions (live-proven 2026-10-02, github + proxmox domains)
+
+**SDK template matching (`matches()`) hard-codes `[^/]+` per param** — any
+resource whose URI param contains a slash (GitHub `owner/name`!) can NEVER
+match an unencoded URI: `github://repos/startupteams/acms-project-framework`
+→ "Unknown resource". Contract: clients pass percent-encoded params
+(`owner%2Fname`); resolvers must `urllib.parse.unquote` EVERY template param
+before validation (live probe: template matched with %2F, but the RAW `%2F`
+string reached the adapter VALIDATION → denied). Regression test:
+`test_repo_resource_url_encoded_owner`. Wrap unquote once in a module-level
+helper; apply in BOTH the transport path (`tpl_fn(**kwargs)`) and the
+direct/registry path (tests call `cap.handler(identity, params)`).
+
+**Unknown tool args must REJECT, not silently drop** — `_bind_args` filtered
+`kwargs` to the handler signature, so a caller passing a foreign `branch=`
+argument got a confusing downstream error instead of an honest denial. Now
+raises `VALIDATION: unknown argument(s) [...]` (an ignored ownership-shaped
+arg would mask policy violations). Test: `test_unknown_tool_args_rejected`.
+
+**Domain-scope migration for BOTH token kinds** — mint-assignment defaults
+lack every domain's scopes (only `acms.read/write`). Each new domain needs:
+(1) widen mint defaults, (2) `grant-scopes` CLI unions into agent AND
+assignment tokens (`grant_assignment_scopes` added in W3; W2 only covered
+agent tokens), (3) mint-assignment has NO --scopes flag — grant AFTER mint.
+
+**Approval-gated SENSITIVE_WRITE ordering (live fact):** the policy gate fires
+BEFORE any handler logic — a no-grant call gets `APPROVAL_REQUIRED` without
+creating anything. The flow is: call `runtime.request_elevated` (SAFE_WRITE,
+needs `runtime.write` scope) → durable PENDING request → executive runs
+`cli approval decide <id> APPROVED` (grant TTL 15 min) → re-call the tool
+(grant consumed atomically). Tests must `_arm_grant(server, agent, capability)`
+before EVERY SENSITIVE_WRITE call — one grant = one call.
+
+**Registry storage names:** tools = dot-normalized storage key
+(`proxmox_sandbox_create`), registry capability keys = dotted canonical names
+(`proxmox.sandbox.create`). Test helpers map `tool_name.replace(".", "_")`.
+
+**ARM sandbox substrate (W4, Server Manager side):** a sandbox IS an ARM
+runtime with `runtime_class="sandbox"` + `sandbox_expires_at` (migration
+0004) + `ownership_meta={kind: sandbox, ttl_hours}`. TTL sweep lives in
+`ReconciliationService.expire_stale_sandboxes()` called FIRST in
+`reconcile_all()` (flip → DESIRED_DESTROYED, API-only; idempotent). extend-ttl
+endpoint = sandbox-only (422 otherwise) + bounded by
+`SERVER_MANAGER_ARM_SANDBOX_{DEFAULT,MAX}_TTL_HOURS` (8/72). Gateway-side
+sandbox name: `sbx-<work_uid>-<agent>` — **PVE rejects underscores in VM
+names** ("invalid format — not a valid DNS name"); map `_`→`-`, lstrip/rstrip
+dashes, must start alnum. Ownership enforced by deterministic name-resolution
+(foreign sandboxes unreachable, not merely denied).
+
+**SM list endpoint shape:** `GET /api/v1/agent-runtimes` returns
+`{"runtimes": [...]}` (wrapped dict), NOT a bare list — adapters must unwrap;
+accept both shapes. (`GET /provisioning-jobs/{id}` wants a UUID; passing a
+request_id 500s.)
+
+**Three live-found ARM provisioning bugs fixed 2026-10-02 (PRs #76/#77/#78):**
+1. `clone_template()` pinned `target=template_node` → clone LANDED on the
+   template node while `wait_clone_lock_release()` polled the PLACED node →
+   240s timeout + orphan VM. All 5 production workers were ADOPTED runtimes —
+   the cross-node clone path had never been exercised before the first
+   sandbox probe. Fix: `target=spec.node`.
+2. Cross-node full clone 500s when the template's node-local storage (golden
+   template 121 root disk = `testthin`) is INACTIVE on the target node ("can't
+   clone VM to node X (VM uses local storage…)"). Fix: `template_storage()` +
+   `storage_active()` checked BEFORE the clone; fail closed with an honest
+   error. Fake providers in tests must stub both methods.
+3. Sandbox placement pins to the template node (`sandbox_pinned_to_template_node`
+   reason in `select_node`) — node-local template storage makes cross-node
+   placement impossible until testthin is active cluster-wide or the template
+   is replicated.
+
+**🚨 DHCP/static-IP collision (CRITICAL, live-proven):** a sandbox VM's DHCP
+lease was `10.0.20.203` — worker-001's STATIC IP. Transient ARP conflict;
+bridge traffic at risk ~60s until VM powered off + destroyed; worker unharmed
+(bridge 200 after ARP refresh). Worker statics sit INSIDE the Kea lease pool.
+Sandbox create is PAUSED until Jordan picks: Kea static reservations / sandbox
+DHCP class/range / gateway-managed static pool + `ipconfig0`. Any future
+clone-provisioning faces the same risk. Full detail: the 2026-10-02 W4 handoff
+(`~/acms-jira-mcp-20261002/HANDOFF-20261002-W4-PROXMOX-SANDBOX-DEPLOYED.md`).
+
+**Gateway probe-token hygiene (proven pattern):** mint with
+`cli mint-agent <name> --ttl-days 1`, capture raw from the file (mint output
+has a `# NOTE:` comment header BEFORE the JSON — `read().split("\n",1)[1]`,
+key is `token` not `raw_token`), `chmod 600`, grant scopes AFTER mint
+(grant-scopes unions BOTH token kinds), then REVOKE both tokens
+(`cli revoke <id> <reason>`) + delete raw files when done. Assignment mint
+requires `--agent-token <agent-raw>` (binding anchor).
