@@ -1,7 +1,7 @@
 ---
 name: acms-project-operations
 description: "Operate the ACMS control plane (startupteams/acms-project-framework): branch/PR/no-self-merge discipline, safe release + rollback tooling, live CT122 quirks, Docker/Compose pitfalls."
-version: 1.0.0
+version: 1.1.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -73,6 +73,14 @@ they don't exist, the assertion itself is the confusion artifact (the final
 pre-handoff message of 2026-10-01 fabricated record names and falsely declared
 the whole environment unverified). Conversely, directives that DID arrive but
 were dropped from the visible transcript are marked unverified, not discarded.
+
+## Usage-pressure safe checkpoint
+
+When Jordan warns that session usage is nearly exhausted and asks for a handoff, stop widening scope immediately. Preserve a coherent checkpoint rather than racing an unreviewed deployment: run focused compile/tests/diff checks, commit and push the feature branch, open a **draft PR**, leave production unchanged, and deliver one Markdown handoff with exact verified/unverified status, continuation commands, rollback, and untouched gated phases. Never claim the broader plan complete merely because the checkpoint is durable.
+
+## Jira reconciliation intake — no silent candidate-only success
+
+A `completed` reconciliation run is not proof of intake. Inspect per-issue outcomes: `examined>0` with `added=started=failed=0` and only candidate-observed events means the workflow may have intentionally returned before import. Eligible unlinked issues require an explicit contract: immutable accountId + ready status → fail-closed Project mapping → exactly-once Work/link → idle worker assignment → authoritative `dispatch_service` → bridge ACK. Release an assignment lock on failed/blocked dispatch. Persist a durable outcome for every examined issue and expose it to operators. Completion write-back must reuse one canonical Artifact, post the exact URL, and transition only behind the explicit mutation flag. Full procedure and acceptance proof: `references/jira-reconciliation-intake-and-writeback.md`.
 
 ## Release tooling (deploy/ in the repo)
 
