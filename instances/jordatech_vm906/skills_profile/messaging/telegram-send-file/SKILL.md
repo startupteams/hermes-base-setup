@@ -64,4 +64,12 @@ Hermes gateway is connected to Telegram (check `gateway_state.json` → `platfor
 - 50 MB upload limit per file; larger files need chunking or an external link.
 - The gateway process env has NO telegram vars (`/proc/<pid>/environ` is clean) — the token lives in Hermes' credential layer, only reachable via `get_env_value`.
 - `caption` max 1024 chars; keep it a summary, put details in the file.
+- **Verify BEFORE sending**: `ls -la` the file and grep it for the secret
+  patterns above. A descriptive word like "password" inside prose is fine —
+  abort only on actual token-shaped values.
+- `TELEGRAM_HOME_CHANNEL` from the profile `.env` works as chat_id (verified
+  2026-10-02, profile agent_stea004_entrepreneur); no need to hardcode a chat
+  id when the env carries it.
+- Success signature: `ok: True` + `file_size` matching the source byte count
+  exactly; report message_id as delivery proof.
 - As a final fallback, media can also be referenced with the MEDIA:/file-delivery convention in a normal reply if the platform supports native attachments — but this Bot API path works even when that doesn't render.

@@ -1,6 +1,6 @@
 STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
-ACMS prod f6ac25b (0013 naming): 5-worker fleet LIVE acms-hermes-worker-uid-001..005 (UUIDs kept; legacy_name/worker_uid; PATCH /agents/{id} display-only). 001=VM124 miam00111 STAYS; 005=VM128/miam-00100 test. Template-121 clones need aiohttp pip. LLM Mgr 66f37a50: /admin/power (PDU 151/152/153+mini split, TOTAL, stale-not-zero). A2A path PROVEN: dispatch→ACK→watcher completion→auto-close; SSE Last-Event-ID exact resume; Jira token=Basic auth, /search retired→POST /search/jql; STNA-87=acceptance issue (comment 10892); heredoc-in-ssh mangles JSON→scp files.
+Phase C DONE (10-02): ACMS prod 7daad53 (alembic 0017_power_payload_text). PRs #72 operator UI (Home zones/kanban §12/agent chat §20-24/product detail/artifacts/usage/global search), #73 facility-payload+legacy-handoff fixes, #74 migration 0017 payload_json→Text. §44 demo 45/45; §41 chat 7/7; §42 inbox 17/17; suite 325. operator_data.py = shared UI data layer. gitleaksignore per-test-file pattern. §31 lifecycle Qs open; hourly slop/power schedulers + SSE chat streaming = FUTURE_WORK.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §

@@ -33,6 +33,10 @@ and current state in memory.
 
 - Questions before NEW plans, then **full autonomy** — roadblock → pivot,
   never stop.
+- **All durable notes in ENGLISH** — session notes, handoffs, STEER-LOG,
+  PLAN-OF-RECORD, SESSION-STATE (Jordan's mid-session steer 2026-10-02:
+  "switch back to english when taking notes, not chinese please"). Never
+  produce session artifacts in another language.
 - **Never re-gate mid-execution.** If a plan is already approved (his authored
   plan doc, his "continue work"), do not send a clarify/decision prompt; the
   2026-09-26 session's clarify timed out and he replied "What are you waiting
@@ -335,6 +339,11 @@ still keep the habit — the guard is local to this machine):**
     `env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/local/bin ACMS_ADMIN_TOKEN=test-token .venv-acms/bin/python -m pytest -q`.
 - Detailed session specifics (PR list, live §36–§40 proofs, release chain):
   `references/phase-b-data-layer-2026-10-01.md`.
+- Phase C operator UI (Release 5): `references/phase-c-operator-ui-2026-10-02.md`
+  — release chain #72/#73/#74, operator_data shared-layer rule, the
+  facility-payload + varchar(512) live-found bugs, chat sanitization, alembic
+  scratch-DB test recipe, and the re-runnable §41/§42/§44 acceptance-proof
+  scripts pattern.
 
 ## Pointers
 
