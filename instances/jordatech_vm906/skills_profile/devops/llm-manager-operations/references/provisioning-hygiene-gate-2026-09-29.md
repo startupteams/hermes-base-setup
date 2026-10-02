@@ -1,5 +1,45 @@
 # Provisioning Hygiene Gate — Live Wiring Notes (2026-09-29, PR #59; Phase D)
 
+> **2026-10-02 W4 UPDATE — 3 live-found clone-provisioning bugs (PRs #76/#77/#78), first-ever
+> exercise of the clone path since placement-as-code (all 5 production workers were ADOPTED
+> runtimes, so the clone path was never hit cross-node before):**
+>
+> 1. **Clone target (PR #76):** `clone_template()` pinned `target=spec.template_node` — the VM
+>    LANDED ON THE TEMPLATE NODE while `wait_clone_lock_release()` polled the PLACED node's vmid
+>    (which doesn't exist there) → 240s timeout → job FAILED + orphan VM on the template node.
+>    Fix: `target=spec.node`. Regression: `tests/server_manager/test_clone_target.py`.
+> 2. **Template-storage gate (PR #77):** cross-node full clone 500s when the template's
+>    node-local storage is inactive on the target ("can't clone VM to node X (VM uses local
+>    storage…)"). Golden template 121's root disk = `testthin` (lvmthin, INACTIVE on miam-00100).
+>    Fix: `template_storage()` + `storage_active()` provider methods checked BEFORE the clone;
+>    fail closed with an honest error. Fake providers must stub both.
+> 3. **Sandbox placement pin (PR #78):** `runtime_class=sandbox` pins to the template node
+>    (reason `sandbox_pinned_to_template_node`) — node-local template storage makes cross-node
+>    placement impossible until testthin is active cluster-wide or the template is replicated.
+>
+> **🚨 CRITICAL DHCP finding (live-proven 2026-10-02):** a clone-provisioned sandbox VM's DHCP
+> lease was `10.0.20.203` — worker-001's STATIC IP. Transient ARP conflict (~60s risk to
+> worker-001 bridge traffic); VM powered off + destroyed; worker recovered (bridge 200 after
+> ARP refresh). **Worker statics sit INSIDE the Kea lease pool** — any clone-provisioned VM
+> risks grabbing them. Sandbox create paused until Jordan picks: Kea static reservations /
+> sandbox DHCP class / gateway-managed static pool + `ipconfig0`.
+>
+> **PVE name rule (live-found):** VM names REJECT underscores ("invalid format — not a valid
+> DNS name"). Sandbox naming: `sbx-<work_uid>-<agent>` with `_`→`-`, lstrip/rstrip dashes,
+> start alnum, ≤63.
+>
+> **Sandbox TTL substrate (PR #75):** `runtime_class="sandbox"` + `sandbox_expires_at`
+> (migration 0004_sandbox_ttl) + `ownership_meta={kind, ttl_hours}`; TTL sweep
+> (`expire_stale_sandboxes`) runs FIRST in `reconcile_all()` → DESIRED_DESTROYED flip
+> (API-only, idempotent); `POST /agent-runtimes/{id}/extend-ttl` (sandbox-only 422, bounded
+> by `SERVER_MANAGER_ARM_SANDBOX_{DEFAULT,MAX}_TTL_HOURS` = 8/72, audited).
+>
+> **qga/wait_for_ip note:** the provider's `wait_for_ip` uses `agent/network-get-interfaces`
+> (DASHED path — correct). A 501 on un-dashed `network-getinterfaces` in ad-hoc probes is a
+> probe-path bug, not the guest. Also: a FAILED job's runtime row keeps `vmid=NULL` even when
+> the VM was created — orphan VMs need direct PVE disposal (ownership marker lives in the VM
+> description; job rows stay ERROR-honest, never fabricated to match).
+
 ## What the gate is
 
 `server_manager/agent_runtime_manager/services/provisioning.py` step 6

@@ -35,10 +35,16 @@ manual release transaction). Do not edit prod files in place.
   here, and remember `agent-runtimes` GET needs `runtime:read`.
 - Endpoints (v1.0.0 + 2026-09-28 additions): `/api/v1/agent-runtimes[/{id}]`,
   `/desired-state`, `/agent-runtimes/{id}/reconcile`, `/reconcile`,
-  `/agent-runtimes/{id}/state-sync`, `/api/v1/model-routes[/{route}]`,
+  `/agent-runtimes/{id}/state-sync`, `/agent-runtimes/{id}/extend-ttl`
+  (sandbox-only, 2026-10-02 PR #75; 422 on non-sandbox, bounded 8/72h),
+  `/api/v1/model-routes[/{route}]`,
   `/api/v1/hosts`, `/api/v1/usage`, `/api/v1/pdu/*` (health, capabilities,
   assets, asset power-state, action-plans=DRY-RUN, jobs, audit; actuation
   env-gated `SERVER_MANAGER_PDU_ACTUATION=1`, `off` refused at SM layer).
+  **List-shape trap (live-verified 2026-10-02):** `GET /api/v1/agent-runtimes`
+  returns a WRAPPED dict `{"runtimes": [...]}`, not a bare list — adapters/
+  scripts must unwrap (or accept both). `GET /provisioning-jobs/{id}` wants a
+  UUID; passing a request_id 500s (query the DB by request_id instead).
   New 2026-10-01 (PR #74, prod fce5ba7): **`GET /api/v1/facility/power`**
   (scope `usage:read`) — per-channel (PDU MIAM-00151/152/153 + mini split) +
   TOTAL MARION_IA_USA energy/cost for ACMS ingest; stale → NULL + STALE +
@@ -187,6 +193,12 @@ manual release transaction). Do not edit prod files in place.
   (`ARM_RECONCILE_SHUTDOWN_WAIT_S`, default 30s/3s polls). Live lesson: PVE
   state flips LAG the API ack — an immediate status read still says `running`
   after an accepted shutdown. Never record nonconvergence without the wait.
+- **Sandbox TTL sweep (PR #75, 2026-10-02, plan §26):**
+  `expire_stale_sandboxes()` runs FIRST inside `reconcile_all()` — sandbox-class
+  rows past `sandbox_expires_at` flip to DESIRED_DESTROYED + durable
+  `sandbox_ttl_expired` event (API-only; idempotent — no re-flip of already-
+  expired rows). No background loop exists; `POST /reconcile` (or any
+  reconcile_runtime) drives the sweep. Clock injection via `self._now()`.
 - DESIRED_DESTROYED is API-only; the reconciler NEVER destroys. PVE
   unreachable → record `last_error`, no state flip on unknown ground truth.
 - Single-replica discipline (TDR-0009): one uvicorn worker; no leader election
@@ -351,6 +363,11 @@ manual release transaction). Do not edit prod files in place.
   `references/cd-artifact-chain-repair-2026-09-29.md`
 - **Provisioning hygiene gate** (HYGIENE_GATE wiring, checks, failure
   semantics, test patterns): `references/provisioning-hygiene-gate-2026-09-29.md`
+  — now ALSO carries the 2026-10-02 W4 update: 3 live-found clone-provisioning
+  bugs (clone target / template-storage gate / sandbox placement pin, PRs
+  #76/#77/#78), the CRITICAL DHCP-lease-vs-worker-static-IP collision finding
+  (.203), PVE VM-name rules (no underscores), and the sandbox TTL substrate
+  (runtime_class=sandbox, migration 0004, TTL sweep, extend-ttl).
   stories, live-proof transcript, open items): `references/flight-2026-09-28-session-notes.md`
 - **Facility-power SM route (2026-10-01, PR #74):** route SQL semantics,
   stale-withholding contract, ACMS-ingest pairing, test patterns for stubbing
