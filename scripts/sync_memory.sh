@@ -34,7 +34,13 @@ cd "$REPO_DIR"
     exit 0
   }
 
+# HARD GUARD (2026-10-02): VM906 may only commit to jordatech_vm906
+ALLOWED_BRANCH="jordatech_vm906"
   current_branch="$(git branch --show-current)"
+if [ "$current_branch" != "$ALLOWED_BRANCH" ]; then
+  log "REFUSED: VM906 sync is restricted to $ALLOWED_BRANCH (current: $current_branch). Aborting."
+  fail "branch guard triggered"
+fi
   if [ -z "$current_branch" ]; then
     fail "Detached HEAD state; cannot determine active branch."
   fi

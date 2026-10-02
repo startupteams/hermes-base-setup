@@ -110,7 +110,7 @@ git add instances/jordatech_miam00101_omarchy
 if ! git diff --cached --quiet; then
   git commit -m "Seed Omen instance metadata (import from jordatech_vm906)"
 fi
-git push -u origin jordatech_miam00101_omarchy || echo "WARN: push failed (offline?); local branch exists, retry later"
+echo "SKIPPED: push disabled 2026-10-02 — VM906 must not push jordatech_miam00101_omarchy (MIAM-00101 owns that branch). Local staging left for review only."
 
 # ---------- Phase N: fetch VM906 branch into worktree ----------
 git fetch origin jordatech_vm906
