@@ -1,5 +1,36 @@
 # Jira reconciliation intake and completion write-back
 
+## PROVEN LIVE 2026-10-02 (STNA-88 stop gate PASSED, prod 07043f1)
+
+- Intake chain works end-to-end: eligible issue → fail-closed project map →
+  exactly-one Work Item (UID) → idle worker (prefers HEALTHY) → assign_primary →
+  dispatch_service (budget+Jira gates) → bridge ACK → watcher completion →
+  canonical handoff → Jira BLUF with exact artifact URL. Second reconcile = zero
+  duplicates. Probe recipes: docker cp a python script into acms-acms-app-1 and
+  run against `http://127.0.0.1:8000` (nginx 403s loopback from the CT host;
+  container-internal loopback is fine).
+- **ADF heading trap (live 400):** `_markdown_to_adf` MUST emit
+  `{"type":"heading","attrs":{"level":N}}` — `type:"heading2"` etc. is INVALID
+  ADF; Jira Cloud 400s INVALID_INPUT and only the durable `JIRA_OUTBOUND_FAILED`
+  events reveal it. Unit conversion tests never hitting real Jira can't catch
+  node-shape bugs — **every acceptance run must make ONE live outbound write
+  probe per integration surface** (3rd instance of the unit-green/live-400
+  class).
+- **Hermes 0.19 run approval:** dispatched runs may pause
+  `waiting_for_approval` (last_event `approval.request`). Resolve via bridge
+  `POST /v1/runs/{id}/approval` body `{"choice": "session"}` — valid choices
+  are once/session/always/deny; "approve"/"approved" are INVALID (400
+  invalid_approval_choice). 409 "no pending/active approval" = raced a
+  tool-cycle; retry when `approval.request` reappears. For unattended Jira
+  intake, pre-authorize the dispatch tool in the worker profile.
+- Recovery for a missed write-back after a fix deploy: the
+  `JIRA_HANDOFF_POSTED` exactly-once guard blocks auto-redelivery (correct);
+  re-post the identical body through `JiraClient` in-container and record the
+  guard event with `actor_source=operator_recovery`.
+- Assignment list API (`/api/v1/work/assignments`) renders
+  dispatched_at/acknowledged_at/bound_session_id as NULL/"" even though
+  dispatch-time writes succeeded — verify via events, not the list repr.
+
 ## Failure class: successful run with zero action
 
 A reconciliation run can honestly report `completed` while silently doing no useful work if eligible, unlinked Jira issues are only emitted as candidate observations. Diagnose from all three layers:
