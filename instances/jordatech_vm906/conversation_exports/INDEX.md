@@ -1,8 +1,8 @@
 # VM906 Conversation History Index
 
-Exported: 2026-10-02T18:00:15.124542+00:00
+Exported: 2026-10-02T19:00:50.856346+00:00
 
-Sessions: 298 | Messages: 52276
+Sessions: 300 | Messages: 52472
 
 | # | Started | Source | Title | Msgs | File |
 |---|---------|--------|-------|------|------|
@@ -303,4 +303,6 @@ Sessions: 298 | Messages: 52276
 | 295 | 2026-10-02T14:16 | telegram | (untitled) | 109 | sessions/20261002_141614_16f879.md |
 | 296 | 2026-10-02T14:23 | telegram | Investigate unauthorized session model switch | 200 | sessions/20261002_142323_906ef5cd.md |
 | 297 | 2026-10-02T14:30 | telegram | (untitled) | 77 | sessions/20261002_143032_987524.md |
-| 298 | 2026-10-02T15:07 | telegram | (untitled) | 723 | sessions/20261002_150753_54795994.md |
+| 298 | 2026-10-02T15:07 | telegram | Jira Workflow Recovery and Internal MCP Gateway | 752 | sessions/20261002_150753_54795994.md |
+| 299 | 2026-10-02T18:12 | telegram | Delegate Coding to Claude Code | 1 | sessions/20261002_181221_c9d15a91.md |
+| 300 | 2026-10-02T18:12 | telegram | Hermes Gateway Restart | 166 | sessions/20261002_181257_5fe97dd9.md |

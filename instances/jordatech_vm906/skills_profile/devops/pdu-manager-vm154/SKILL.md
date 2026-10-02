@@ -146,6 +146,18 @@ Idempotency persists across restarts (/var/lib/pdu-control/idempotency.json).
   on big single posts).
 - LLDAP GraphQL: `user(userId:)` not `user(id:)`; introspect mutations.
 
+## SM proxy surface (read-only; gateway/server-manager consumers)
+
+Server Manager (VM114:8300) proxies a READ subset of the PDU Manager under prefix
+**`/api/v1/pdu`** (`server_manager/llm_manager/api/pdu_routes.py`, svc-acms bearer):
+`GET /health`, `/capabilities`, `/assets`, `/assets/{asset_id}/power-state`, plus
+`POST /action-plans` (dry-run), `/jobs/{id}`, `/audit`, `/actions`. There is **NO
+`/api/v1/pdus/{key}/outlets/{n}` on SM** — that path exists only on the PDU Manager's own
+API (VM156). Consumers must resolve outlets via the SM asset index (`pdu_id` + `outlet`
+→ `asset_id`) then read `assets/{asset_id}/power-state`. Cold per-asset power-state reads
+fan out to the PDU SSH poll (~20s); clients need a raised timeout (~45s) or they see
+DOMAIN_UNAVAILABLE/TimeoutError. Asset index itself answers <100ms.
+
 ## Asset-addressed API (REV4 §10C Phases 2-6, LIVE since 2026-09-27)
 
 - **Asset mapping = Git-managed labels.** Each outlet's label carries `MIAM-##### - <description>`; the FIRST `MIAM-#####` token is the outlet's asset_id (⚠️ labels use 5-digit numbers — a `MIAM-\d{3}` regex silently matches a 3-digit prefix of `MIAM-00167` and creates phantom duplicates). `build_asset_index()` in `app/api_assets.py` derives the mapping and raises `ASSET_MAPPING_AMBIGUOUS` (500) if one asset_id appears on two outlets.

@@ -353,16 +353,27 @@ still keep the habit — the guard is local to this machine):**
   scratch-DB test recipe, and the re-runnable §41/§42/§44 acceptance-proof
   scripts pattern.
 
-## MCP gateway operations (W1–W4, live 2026-10-02)
+## MCP gateway operations (W1–W7, live 2026-10-02)
 
 The gateway (`miam-mcp-gateway.service` on VM114:8202) is additive; code lives in the ACMS
 repo (`mcp_gateway/`) but deploys by **rsync to `/opt/mcp-gateway/repo/` + systemctl
 restart** — NOT via release.sh (preserve the gateway's own `.venv-mcp`). After any gateway
 change: rsync (exclude `.git .venv-mcp __pycache__ *.pyc acms.db dist .hermes`), restart,
-check `/health` reports all expected domains (currently 5: acms/llm/runtime/github/proxmox).
-rsync-with-delete does NOT delete a path that only exists remotely when the local tree also
-has the same dir — verify new-domain code markers (`grep -c <new-symbol>` on VM114) to prove
-deployed code == main tip.
+check `/health` reports the expected domains (7 LIVE: acms/llm/runtime/github/proxmox/power/jira;
+registry+monitoring code deployed but domains ABSENT until creds staged — absent-domain is the
+designed health behavior, not an error). rsync-with-delete does NOT delete a path that only
+exists remotely when the local tree also has the same dir — verify new-domain code markers
+(`grep -c <new-symbol>` on VM114) to prove deployed code == main tip.
+
+W5–W7 additions (2026-10-02): power (`pdu.*/power.*` via SM), jira (gateway-held credential,
+assignment-scoped issue-key enforcement, plan §28 transition policy enforced IN THE GATEWAY,
+global mutation flag fail-closed), registry/monitoring (read-only; creds pending VM119 qga
+recovery). A "merged + rsynced" window is NOT closed until live probes + evidence + handoff
+exist — W5 opened exactly in that half-done state. Live-found defect classes (SM `totals`
+contract drift, CLI scope hardcode, missing-error-import NameError, wrong endpoint path,
+client timeout vs fan-out read, Kuma 0/1 truthiness, `self.registry` name collision with
+PolicyRegistry) are detailed in `references/mcp-gateway-w5-w7-2026-10-02.md`, alongside the
+gateway-domain env-staging recipe and the per-window acceptance matrices.
 
 - **pyproject/Dockerfile pairing trap (release #1 of gateway code auto-rolled back):**
   adding a package to pyproject `packages` without adding `COPY <pkg>` to
@@ -424,7 +435,7 @@ deployed code == main tip.
   Settings-fixture anti-pattern, bootstrap honesty contract, live-UI probe
   recipes, open items.
 - `references/pve-qga-helper-2026-10-02.md` — the workstation qga helper (pve_qga.py): PVE API login quirks (@pam realm, CSRF on every POST), exec command-as-list, exec-status GET query-string, file-write literal-base64 + sha verify, 596-retry pattern.
-- `references/mcp-server-building-2026-10.md` — BUILDING MCP gateways (miam-mcp-gateway W1–W4 live on VM114, 5 domains): official SDK quirks (dotted names via Tool subclass, zero-param template walrus bug, contextvar auth propagation, stateless+JSON transport, **`[^/]+` template matching → %2F-encoded slash params**, unknown-arg rejection, approval-gated SENSITIVE_WRITE flow), token model, deploy recipe, verification playbook incl. `hermes mcp test`, and the W4 ARM sandbox substrate (3 live-found clone-provisioning bugs + the DHCP/static-IP collision finding).
+- `references/mcp-server-building-2026-10.md` — BUILDING MCP gateways (miam-mcp-gateway W1–W4 live on VM114; W5–W7 detail now in `references/mcp-gateway-w5-w7-2026-10-02.md`): official SDK quirks (dotted names via Tool subclass, zero-param template walrus bug, contextvar auth propagation, stateless+JSON transport, **`[^/]+` template matching → %2F-encoded slash params**, unknown-arg rejection, approval-gated SENSITIVE_WRITE flow), token model, deploy recipe, verification playbook incl. `hermes mcp test`, and the W4 ARM sandbox substrate (3 live-found clone-provisioning bugs + the DHCP/static-IP collision finding).
 - `references/hermes-019-worker-api-surface-2026-10-01.md` — the VERIFIED
   Hermes 0.19.0 worker api-server surface: /v1/capabilities, run lifecycle
   (run_id = A2A ACK; statuses TTL'd), run-events SSE payload shapes,
