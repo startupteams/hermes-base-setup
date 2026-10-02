@@ -33,6 +33,14 @@ manual release transaction). Do not edit prod files in place.
   `/api/v1/hosts`, `/api/v1/usage`, `/api/v1/pdu/*` (health, capabilities,
   assets, asset power-state, action-plans=DRY-RUN, jobs, audit; actuation
   env-gated `SERVER_MANAGER_PDU_ACTUATION=1`, `off` refused at SM layer).
+  New 2026-10-01 (PR #74, prod fce5ba7): **`GET /api/v1/facility/power`**
+  (scope `usage:read`) — per-channel (PDU MIAM-00151/152/153 + mini split) +
+  TOTAL MARION_IA_USA energy/cost for ACMS ingest; stale → NULL + STALE +
+  timestamp (never 0), total withheld with `incomplete_reason` when any
+  channel stale; rate from `electricity_rates` components else plan v0.2.1.
+  Self-contained SQL over `get_session_factory("llm")` — deliberately does
+  NOT import the web app's `power_view` (layout boundary). ACMS's
+  `FacilityPowerClient` consumes this with the SAME svc-acms token.
 
 ## VM114 release transaction (proven loop)
 
@@ -72,6 +80,12 @@ manual release transaction). Do not edit prod files in place.
    you'll read a phantom "still running".
 6. If `server_manager/` code changed: `systemctl restart server-manager-api`
    (its own systemd unit; NOT restarted by the web-app transaction).
+   **Re-hit live 2026-10-01 (PR #74):** deploy-release.sh restarted
+   web/collector/emporia/recovery but NOT server-manager-api → the new SM
+   route 404'd via openapi until the manual restart. Make
+   `systemctl restart server-manager-api && curl -s :8300/openapi.json |
+   python3 -c "…"` the mandatory post-release verification whenever the diff
+   touches `server_manager/`.
 7. Check `deploy/ ops/` diffs before releasing: if the transaction tooling
    itself changed, do a same-tip drill first (tooling-mid-flight is unproven).
 8. Verify: `curl -sk https://10.0.20.108/healthz` reports the new git_sha.
@@ -293,6 +307,19 @@ manual release transaction). Do not edit prod files in place.
 - FastAPI gotcha: an auth dependency's inner function MUST annotate its param
   `request: Request` — an unannotated `request` becomes a required QUERY param
   and every call 422s with `loc: ["query","request"]`.
+- **Stubbing `get_session_factory` in route tests:** routes do
+  `Session = get_session_factory("llm")` then `with Session() as session:` —
+  the monkeypatched factory must return a CALLABLE that returns the fake
+  session (`monkeypatch.setattr(fp, "get_session_factory", lambda *a, **k: (lambda: _FakeSession()))`),
+  not a session instance (`TypeError: '_FakeSession' object is not callable`).
+  Fake sessions need `__enter__`/`__exit__` and per-call scripted `execute()`
+  results (see tests/server_manager/test_facility_power_route.py — 4 tests:
+  401 no-token / 403 wrong-scope / 200 payload / collector-missing).
+- **Jira REST v3 comment bodies are ADF documents, not strings** (contract
+  applies anywhere Jira is written): plain-string bodies 400 with "Comment
+  body is not valid!". ACMS `jira_client._markdown_to_adf` converts
+  markdown → `{"type":"doc","version":1,"content":[…]}`; any NEW Jira-writing
+  code must go through it.
 - Route introspection: `app.routes` shows `_IncludedRouter` wrappers — probe
   with TestClient instead of counting APIRoutes.
 
@@ -316,3 +343,6 @@ manual release transaction). Do not edit prod files in place.
 - **Provisioning hygiene gate** (HYGIENE_GATE wiring, checks, failure
   semantics, test patterns): `references/provisioning-hygiene-gate-2026-09-29.md`
   stories, live-proof transcript, open items): `references/flight-2026-09-28-session-notes.md`
+- **Facility-power SM route (2026-10-01, PR #74):** route SQL semantics,
+  stale-withholding contract, ACMS-ingest pairing, test patterns for stubbing
+  `get_session_factory`: `references/sm-facility-power-route-2026-10-01.md`

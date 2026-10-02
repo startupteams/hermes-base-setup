@@ -260,6 +260,82 @@ still keep the habit — the guard is local to this machine):**
   container nginx 403s (container-network source not allowlisted) — same
   rule as all CT122 API probing.
 
+## Phase B data layer (2026-10-01, prod 11a39de, alembic 0014→0016)
+
+- **Human UIDs:** `ACMS-WORK-######-YYYYMMDD_HHMMSS` / `ACMS-ARTIFACT-######-…`
+  (`acms/uid_keys.py`). Work UIDs share the REQ-052 `work_key` counter (short
+  key + long UID = same row number — telemetry session-alignment untouched);
+  artifacts have their own `artifact_uid` counter. Allocation = durable
+  `acms_key_counters` atomic `UPDATE…RETURNING` (never COUNT(*), proven
+  collision-free at 20 parallel on PG). Migration 0014 backfill semantics:
+  work rows WITH a `work_key` KEEP that number; keyless rows continue after
+  the max; artifacts numbered 1..N oldest-first; counters seeded past max so
+  post-migration allocation never collides.
+- **Canonical work handoff (§9):** `acms/canonical_handoff.py` — exactly ONE
+  `work_handoff` artifact per terminal Work Item; an agent-provided handoff
+  becomes the body (NEVER overwritten — §47 stop condition), else a fallback
+  synthesized from durable data (scope/sessions/model/tokens/artifacts/Jira).
+  Hooked into BOTH completion authorities (ADR-0012 callback AND the
+  reconciler sweep); idempotent; swallow-and-audit (generation must never
+  break completion).
+- **Route-mount map — check `/openapi.json` FIRST on any 404** (re-earned
+  twice 2026-10-01): `a2a_api` AND `search_api` routers mount at ROOT —
+  `/artifacts[/{id}][/content]`, `/projects`, `/products`, `/repositories`,
+  `/repository-metrics/refresh`, `/products/{id}/slop[-history]`,
+  `/model-policy/...`, `/inbox/...`, `/execution/...`, `/power/summary`,
+  `/usage/summary`, `/search`. There is NO `/api/v1/artifacts`. `work_api` =
+  `/api/v1/work/...`; agents = `/api/v1/agents...`.
+- **Jira REST v3 comments REQUIRE ADF document bodies** — a plain string
+  400s with "Comment body is not valid!" (hit live posting the STNA-87
+  correction note). `JiraClient._markdown_to_adf` converts headings / bullets
+  / fenced code / paragraphs; ALL lifecycle comments ride it. Never POST
+  `{"body": "<string>"}` to `/rest/api/3/issue/*/comment`.
+- **STNA-86 template fidelity:** `acms/jira_template.py` — fetch the live
+  template issue, extract its sections, fail the candidate when required
+  sections are absent; documented REQUIRED_SECTION_FLOOR applies when the
+  source fetch fails. Future authorized AI-created tickets must CLONE STNA-86
+  and pass this validator (STNA-87 was the loose clone; its correction note
+  = Jira comment 10893, links the canonical artifact by UID).
+- **Slop/repositories (§15/§16):** `acms/slop_metrics.py` — `repositories`
+  (unique owner+repo), product/project link tables (unique pairs),
+  `repository_metric_snapshot` timeseries. LOC/ADR collected via the **GitHub
+  API (trees + contents)** — the app container has NO git binary, so a
+  git-clone collector cannot run in prod. True Slop = LOC / human-written
+  ADRs; Precision = LOC / total ADRs; human-ADR v1 = acceptance marker in the
+  ADR body (approved-by/accepted-by/human-decision); counts stored separately
+  for later refinement; unique-source dedupe in product summaries (a repo
+  linked to N projects under one product counts ONCE). Collector file cap
+  400 (the first real repo measured 221 eligible files and hit the original
+  60). API failures → error snapshot, never a crash.
+- **Facility power (§17):** ACMS ingests `GET /api/v1/facility/power` from
+  Server Manager (:8300, svc-acms token, scope `usage:read`) via
+  `acms/power_ingest.py` → `power_cost_snapshot` (migration 0016). NEVER put
+  Emporia credentials or the llmmanager DSN into ACMS — LLM Manager stays the
+  collector/provider. Stale → NULL + STALE + timestamp (never 0); TOTAL
+  MARION_IA_USA withheld with `incomplete_reason` when any channel is stale.
+  `/power/summary?refresh=1` ingests now; `/usage/summary?hours=` rolls up
+  `cost_attribution` (cloud = ACTUAL, local = ESTIMATE-labeled, never
+  fabricated, never exceeds measured energy).
+- **Test-infra traps (new, hit live):**
+  - Tests calling ROUTE HANDLERS directly must NOT combine the
+    `get_session()` async-generator with an explicit `db.close()` — the
+    generator's context-manager close + the explicit close double-close
+    mid-transaction → `IllegalStateChangeError` + phantom pending INSERTs (a
+    bare `ProductRecord()` insert surfaces at generator cleanup and looks
+    like unrelated corruption). Own the session directly:
+    `from acms.db import SessionLocal; db = SessionLocal()`.
+  - New models modules MUST be imported in `tests/conftest.py` (schema is
+    created at session start, BEFORE the test imports the module — symptom:
+    "no such table: repositories") AND in the parity test's `_collect()`.
+  - Enum seed values are lowercase (`trust_class="internal"`) — the Pydantic
+    response model rejects `"INTERNAL"`.
+  - **Cross-venv PATH pollution:** after sourcing the LLM Manager `.venv-sm`,
+    its `alembic` shadows the ACMS one and the PG-parity chain tests fail
+    spuriously. Rerun clean:
+    `env -i HOME=$HOME PATH=/usr/bin:/bin:/usr/local/bin ACMS_ADMIN_TOKEN=test-token .venv-acms/bin/python -m pytest -q`.
+- Detailed session specifics (PR list, live §36–§40 proofs, release chain):
+  `references/phase-b-data-layer-2026-10-01.md`.
+
 ## Pointers
 
 - `references/live-drill-2026-09-26.md` — bug-by-bug drill breakdown, exact
