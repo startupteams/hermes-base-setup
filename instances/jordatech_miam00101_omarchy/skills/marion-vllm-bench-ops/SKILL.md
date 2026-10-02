@@ -18,6 +18,23 @@ UPDATE hosts SET desired_service_state='SERVING' WHERE guest_ip='<ip>';
 ```
 Engine behavior (v011_recovery.py on VM114 `/opt/llm-manager/app/`): `MAINTENANCE` → logs `maintenance_skip`, never restarts; `SERVING` → bounded recovery (2 VM starts / 2 service restarts, cooldown, then FAILED). Backups: `v011_recovery.py.bak.maint`.
 
+**⛔⛔ GATE CORRECTION v2 (2026-09-25, proven on the Flash-Next promotion — SUPERSEDES the
+2026-09-24 note):** `desired_power_state='STOPPED'` (+ `desired_service_state='MAINTENANCE'`)
+does **NOT** stop power-on recovery. Live evidence: recovery_events 2321 `outage_detected`
+`{"vm_status":"stopped","desired":"STOPPED"}` + 2322 `recovery_vm_start` restarted VM103 ~60 s
+after a clean stop **with both flags set**. Source (`/opt/llm-manager/app/v011_recovery.py`,
+tick()): the only leave-it-off path is §K3 —
+**`desired_power_state='STOPPED_INTENTIONAL'`**. `MAINTENANCE` gates only the HTTP-probe path;
+`STOPPED` alone still counts as an outage. For any planned stop of a GPU-owning VM:
+```sql
+UPDATE hosts SET desired_power_state='STOPPED_INTENTIONAL' WHERE guest_ip='<ip>';
+-- ... work ...
+UPDATE hosts SET desired_power_state='RUNNING', desired_service_state='SERVING' WHERE guest_ip='<ip>';
+```
+Verify the gate held across ≥2 recovery ticks (~30 s) before starting work that depends on the
+VM staying down, and check `recovery_events` for new `recovery_vm_start` rows after.
+(Creds: `/etc/llm-manager/secrets/pg_app_creds` on VM114, key=value format `PG_HOST/PG_DB/PG_USER/PG_PW`; source it, export PGPASSWORD, psql to CT115.)
+
 **Always run bench legs serially.** Two concurrent bench jobs on one host will saturate it and trigger the false-positive path even with SERVING semantics.
 
 ## vllm bench serve gotchas (vLLM 0.28)
@@ -131,7 +148,13 @@ Qwen3.8-Flash-Next attempt — full chain in `references/qwen4exp-flashnext-ampe
 anywhere = 70 GB") was wrong by 10×: unsloth UD quants of Qwen3.8-27B go to 6.2 GB (IQ1_S), UD-Q4_K_M
 = 16.5 GB. Always enumerate `api/models/<repo>?blobs=true` per candidate repo before declaring a fit
 gate failed. Also: a 27B DENSE model on a 16-core CPU box measured **0.8 tok/s** — smaller quant ≠
-viable CPU serving; check the arch (dense vs MoE) before proposing CPU lanes.
+viable CPU serving; check the arch (dense vs MoE) before proposing CPU lanes. Same class of error,
+2026-09-24: a plan's artifact recommendation (`todiadiyatmo/Qwen3.8-Flash-Next-W4A16-Attn8-FP8PLE`,
+~124 GB) was verified TRUE by HF API before download — always do the blobs=true pass first;
+the EXPERT TENSOR FORMAT (per-expert GPTQ-packed vs AWQ-gemm unfused) determines the vLLM loader
+path (`inc`+MARLIN vs custom patches) and is visible in `model.safetensors.index.json` +
+safetensors headers BEFORE downloading (data_offsets aggregates give per-class byte totals:
+PLE table / experts / main layers / vision / mtp).
 
 **vLLM major-version side-by-side pattern:** never upgrade the production venv (custom forks!).
 Build `/opt/vllm-venv-<ver>/`, verify with `pip show` + `import torch; torch.cuda.get_device_capability()`
@@ -140,8 +163,89 @@ Build `/opt/vllm-venv-<ver>/`, verify with `pip show` + `import torch; torch.cud
 `nofail` works live) sized for the FULL artifact, and raise guest RAM BEFORE the load attempt
 (PVE `PUT config {memory: N}` then stop/start — hotplug of memory isn't reliable on existing VMs).
 
+## Community-fork serving (when stock vLLM has hard arch bans) — proven 2026-09-24, Flash-Next V3
+
+When a stock release structurally blocks a model (e.g. Qwen4Exp PP/TP caps), do NOT hand-patch stock
+again — find a community recipe that already solved it, then port it. Verification order that worked:
+
+1. **Verify repos + artifacts from the CLI/API before believing the plan** (`api.github.com/repos/<o>/<r>`,
+   `raw.githubusercontent.com`, `hf.co/api/models/<id>?blobs=true`). Plans name repos that may not exist
+   or may be locally-built images not on any registry.
+2. **Prefer a recipe whose pinned base is a PUBLIC image** (pullable `vllm/vllm-openai:nightly-<sha>`
+   with digest pin) + a source overlay, over a fork author's private Docker image (ahnguyen17's
+   `pp3fix26` is local-build-only; its patches live in docs as prose — reference value only).
+3. **Verify the overlay actually landed in the built image** by grepping a distinctive string from
+   inside the image (`--entrypoint grep <img> -n "requires every PLE layer" …/config.py`), not just
+   by trusting the Dockerfile.
+4. **Checkpoint choice is the loader-path choice.** An AutoRound/INC checkpoint with GPTQ-packed
+   per-expert weights routes to the `inc` quant + MARLIN WNA16 MoE backend and *just loads*; the
+   same model as AWQ-gemm unfused experts required custom loader patches that never fully worked.
+   Inspect `model.safetensors.index.json` + safetensors headers BEFORE downloading (size math AND
+   expert tensor naming: `gate_proj/up_proj/down_proj` + qweight/qzeros/scales per expert = GPTQ-packed).
+5. **Read the recipe's compose/README for exact env knobs** — they encode hard-won settings
+   (`NCCL_P2P_DISABLE`, `VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0`, expandable_segments,
+   `--mamba-cache-mode align`, IPC/shm/SYS_PTRACE/seccomp for PLE offload, power caps).
+6. **Serve launch quirk:** `vllm serve <local-dir>` via the console entrypoint can fail
+   `Invalid repository ID or local directory` (seen 4×, nightly eed1f3d0) while the identical
+   EngineArgs path succeeds. Workaround: launch via
+   `python3 -c "import sys; sys.argv=['vllm','serve',<args>...]; from vllm.entrypoints.cli.main import main; main()"`.
+   Treat console-script launches of bind-mounted local dirs as suspect.
+7. **HF snapshot dirs contain SYMLINKS into `blobs/`** — a `docker -v` mount of the snapshot dir
+   breaks those relative links. Either `cp -rL` to a flat dir (works, doubles disk) or mount a
+   parent dir so links resolve inside the container.
+8. **Set the guest's memory BEFORE starting the test VM with GPUs** — memory changes while a VM
+   is running don't apply on stop/start cycle you planned; a GPU handoff + RAM change + reboot must
+   be sequenced stop → config → start.
+
+Full V3 session detail (recipe audit, checkpoint header analysis, launch script, bench results):
+`/home/jordatech/flashnext-v3-20260924/HANDOFF-QWEN38-FLASHNEXT-V3-20260924.md`
+
 **pve.py guest-exec timing cap:** the helper's internal wait is ~120 s — any longer command (model
 loads, pip installs, downloads) must run detached (`setsid nohup ... < /dev/null &` inside a script
 FILE) writing to a log, then poll. The qga channel also WEDGES under heavy RAM/page-cache pressure
 (repeated `HTTP 500: QEMU guest agent is not running` mid-load) — poll the VM from the node side
 (`/qemu/<id>/status/current` uptime/mem) and retry exec with patience instead of concluding the VM died.
+
+## Production promotion of a test-proven vLLM stack (2026-09-25, Flash-Next VM102→prod)
+
+Pattern for "promote the already-proven stack" plans — the model work is done; the risks are all
+orchestration. Full promotion detail: `references/flashnext-promotion-20260925.md`.
+
+1. **Recon live before acting:** read `/nodes/<n>/qemu/<id>/config` + `status/current` via the PVE
+   API for BOTH VMs — snapshots in old handoffs go stale (our snapshot lacked the 400G scsi3 disk
+   the live config had).
+2. **Tool calling on reasoning models is NOT free:** `vllm serve` 400s every OpenAI tools request
+   without `--enable-auto-tool-choice --tool-call-parser <name>`. Parser name discovery: pass a
+   wrong name once and read the KeyError's `chose from {…}` list. For Qwen3-family reasoning
+   models use `qwen3_xml` (NOT `qwen3` — that is the *reasoning* parser name; tool parsers are a
+   separate registry). `hermes` and `qwen3_coder` also exist. Verify with a synthetic tools request
+   (`get_weather`-style) before declaring the stack production-ready.
+3. **Registry registration is automatic — do not hand-INSERT model_registry rows.** Add the `hosts`
+   row (guest_ip/node/vmid/desired states), and the recovery engine's `sync_registry()` tick
+   probes `/v1/models` on the guest and upserts the registry row itself (healthy/routable iff
+   desired=RUNNING+MANAGED+probe OK). Hand rows risk drift with the sync logic.
+4. **LiteLLM config is only read at proxy boot:** after registry changes run
+   `/opt/llm-manager/venv/bin/python app/litellm_sync.py` (auto-backups config, write temp+rename)
+   then `systemctl restart litellm`. `--dry-run` first to inspect the generated entry.
+5. **Alias targets are HARDCODED in v011_core.py** (`fast`/`code`/`frontier` tuples in
+   sync_registry). Retiring a model's host without editing that tuple leaves the alias pointing at
+   a dark backend. Flag this to the owner rather than silently editing routing.
+6. **onboot audit on shared-GPU siblings:** before finishing, check `onboot` on BOTH VMs that claim
+   the GPUs. Found VM103 (rollback, powered off) with onboot=1 — at the next host reboot it would
+   race the production VM for the 6 GPUs (recovery engine would add a third contender). Set
+   rollback VM onboot=0, production VM onboot=1.
+7. **Restart-safety wrapper:** docker `--rm` containers need a systemd unit
+   (`Type=oneshot`, `RemainAfterExit=yes`, `TimeoutStartSec=1200` for ~9-min vLLM boots) wrapping
+   the launch script; enable it. Caveat: a container crash leaves systemd "active" (oneshot has no
+   supervision) — health comes from the recovery engine's HTTP probe, not systemd.
+8. **Validate at BOTH layers:** direct to the backend (`:8000`) AND routed through LiteLLM
+   (`:4000` with master key from `/etc/llm-manager/litellm_config.yaml`) — chat + tool + vision +
+   long-context needle + C4/C6 concurrency. Keep prompts ≤ ~60K *actual* tokens (repetitive filler
+   tokenizes ~2.5–3.9 chars/tok depending on corpus; the 70K limit error message tells you the
+   real count — binary-search the prompt size once, then reuse).
+9. **Rollback artifacts before the first stop:** snapshot the old prod unit
+   (`systemctl cat vllm.service`) ON THE SOURCE GUEST (a copy-pasted script once ran on VM114 —
+   "No files found" was the tell), note the preset id + revision id, and write the runbook
+   (gate → stop container → qm stop → restore desired states → qm start → verify) into the handoff.
+
+- CPU lanes: dense models can be CPU-viable serving; check the arch (dense vs MoE) before proposing CPU lanes. (from MIAM-00101 instance, preserved 2026-10-02)

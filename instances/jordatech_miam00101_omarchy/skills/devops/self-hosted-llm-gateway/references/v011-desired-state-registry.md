@@ -189,6 +189,15 @@ rubric evals expecting different scores. Measured so far (VM103, /root/v011-benc
   and VM401's `FAST-WORKER-PRODUCTION`. **Direct-SQL preset INSERTs must populate
   `content_hash` (NOT NULL) — compute sha256(content); only the app path fills it.**
 
+## Repo now carries the regression battery (2026-09-27)
+
+The v0.11/v0.12 behaviors described above are covered by in-repo pytest (31 tests, CI-run):
+`tests/test_vm102_switching.py` (NODE_MAP targets, power actions, dashboard source, alias map,
+historical RDMA ring untouched), `tests/test_active_deployments.py` (§21.7 promote/switch/rollback
+via DB only, physical-host independence, cache expiry, legacy fallback, history-table immutability —
+uses pgserver for a no-Docker PG), `tests/test_healthz_metadata.py` (build identity). CI deps
+required: `fastapi uvicorn psycopg2-binary ldap3 requests pyyaml itsdangerous python-multipart pgserver`.
+
 ## Deferred / next
 
 - REMAINING for v0.11 closure (2026-09-14 status): pick qwen3.8 production topology

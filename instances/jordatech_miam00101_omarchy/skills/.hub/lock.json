@@ -1,6 +1,23 @@
 {
   "version": 1,
   "installed": {
+    "caveman": {
+      "source": "url",
+      "identifier": "https://raw.githubusercontent.com/jordatech/caveman/main/skills/caveman/SKILL.md",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:6a93e68b5d843ab6",
+      "install_path": "creative/caveman",
+      "files": [
+        "SKILL.md"
+      ],
+      "metadata": {
+        "url": "https://raw.githubusercontent.com/jordatech/caveman/main/skills/caveman/SKILL.md",
+        "awaiting_name": false
+      },
+      "installed_at": "2026-05-14T06:50:19.905422+00:00",
+      "updated_at": "2026-05-14T06:50:19.905430+00:00"
+    },
     "baoyu-comic": {
       "source": "official",
       "identifier": "official/creative/baoyu-comic",
@@ -48,8 +65,8 @@
       "metadata": {
         "backfilled_from": "optional-skills"
       },
-      "installed_at": "2026-06-22T08:35:39.527546+00:00",
-      "updated_at": "2026-06-22T08:35:39.527546+00:00"
+      "installed_at": "2026-06-22T09:36:58.792338+00:00",
+      "updated_at": "2026-06-22T09:36:58.792338+00:00"
     },
     "pixel-art": {
       "source": "official",
@@ -70,8 +87,8 @@
       "metadata": {
         "backfilled_from": "optional-skills"
       },
-      "installed_at": "2026-06-22T08:35:39.534612+00:00",
-      "updated_at": "2026-06-22T08:35:39.534612+00:00"
+      "installed_at": "2026-06-22T09:36:58.795973+00:00",
+      "updated_at": "2026-06-22T09:36:58.795973+00:00"
     },
     "minecraft-modpack-server": {
       "source": "official",
@@ -86,8 +103,8 @@
       "metadata": {
         "backfilled_from": "optional-skills"
       },
-      "installed_at": "2026-06-22T08:35:39.535301+00:00",
-      "updated_at": "2026-06-22T08:35:39.535301+00:00"
+      "installed_at": "2026-06-22T09:36:58.796635+00:00",
+      "updated_at": "2026-06-22T09:36:58.796635+00:00"
     },
     "pokemon-player": {
       "source": "official",
@@ -102,8 +119,8 @@
       "metadata": {
         "backfilled_from": "optional-skills"
       },
-      "installed_at": "2026-06-22T08:35:39.535507+00:00",
-      "updated_at": "2026-06-22T08:35:39.535507+00:00"
+      "installed_at": "2026-06-22T09:36:58.796822+00:00",
+      "updated_at": "2026-06-22T09:36:58.796822+00:00"
     },
     "dspy": {
       "source": "official",
@@ -121,30 +138,8 @@
       "metadata": {
         "backfilled_from": "optional-skills"
       },
-      "installed_at": "2026-06-22T08:35:39.536879+00:00",
-      "updated_at": "2026-06-22T08:35:39.536879+00:00"
-    },
-    "llama-cpp": {
-      "source": "official",
-      "identifier": "official/mlops/inference/llama-cpp",
-      "trust_level": "builtin",
-      "scan_verdict": "backfilled",
-      "content_hash": "sha256:43a4ec8fb07acce8",
-      "install_path": "mlops/inference/llama-cpp",
-      "files": [
-        "SKILL.md",
-        "references/advanced-usage.md",
-        "references/hub-discovery.md",
-        "references/optimization.md",
-        "references/quantization.md",
-        "references/server.md",
-        "references/troubleshooting.md"
-      ],
-      "metadata": {
-        "backfilled_from": "optional-skills"
-      },
-      "installed_at": "2026-09-24T19:46:30.511288+00:00",
-      "updated_at": "2026-09-24T19:46:30.511288+00:00"
+      "installed_at": "2026-06-22T09:36:58.798022+00:00",
+      "updated_at": "2026-06-22T09:36:58.798022+00:00"
     }
   }
 }

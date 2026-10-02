@@ -1,27 +1,17 @@
-Business ideas: skeptical-investor review before MVP (Data Moat, HITL, Unit Economics); see business-idea-systems skill.
+STL: repo agentifyme-speed-to-lead (React prototype, P0 15/15, High Point demo pending Utkarsh). Separate product; ACMS internal-only; agents sanitized; dedicated gateway.
 §
-BIG: Vercel businessideagenerator-three.vercel.app; repo ~/business_idea_generator.
-§
-AgentifyMe.co: repo github.com/startupteams/agentifyme_server_setup (authorized); branch AGENT_STEA004_ENTREPRENEUR → main.
+Gateway v0.3.0 LIVE VM114:8202 == ACMS b0d2970. LLM Mgr VM114 = 42099fd0 (W4.1 sandbox DHCP isolation LIVE: SM Kea reservations pool .222-.249, gate flag ON → create UNPAUSED; worker statics .203/.204/.206/.207/.208/.209 reserved). ACMS CT122 = b0d2970. GATES: GitHub PAT Contents:write; STNA-89 TO START. Next: W5 PDU+Emporia.
 §
 Jordan writes his own llama-server/vLLM commands (MoE offload, tensor-split, KV quant). Engage at systems-engineer level.
 §
-PDM: CT105 @ miam-00133, https://10.0.20.181:8443/ (LLDAP realm).
+Jordan: broad server autonomy (break OK, document+fix); questions before NEW plans; deliverable = single .md + Telegram upload.
 §
-RDMA ring RoCE 100G, MTU 1500 (no jumbo); no persistent netcfg. PBS MIAM-00147 (store marion-pbs, job 03:05).
+LLM Mgr: /admin/fleet+/api/fleet+/admin/agents live; VM120 qga ok; clone-hygiene gate; ORM cutover; CD artifact chain. W4.1: sandbox template = golden VM135 (121=RETIRED, static .203 netplan); Kea match-client-id=0 REQUIRED (DUID client-ids make Kea ignore hw-address reservations; set/subnet API no-ops it → config-restore only); OPNsense login = JS-shell w/o csrf pair until cookie-test handshake (retry ~24s); PVE DELETE params = query string (form body → 501).
 §
-CX5 SR-IOV persistent (09-13): VFs→VM109 A/B, VM103/111 VF+PF; NCCL 95–97Gb/s. Recipe: proxmox skill cx5-sriov-guest-rdma.md.
+PVE API: pve_api.py (proxmox skill, LLDAP bot auth) for login/vmconfig/raw; pve_qga.py (~/bin, root@pam) for exec-wait + sha-verified write. Node names: miam00111 no-dash, miam-00100 dash. PDU 151:9=00119; 152:3=00135. LLDAP :17170 GraphQL. Subagents: route curl-to-CT122 via CT122-local curl (tirith hook).
 §
-MARION net: DHCP pool .190–.250; statics below .190; CT906 pinned .195; MIAM-00115 owns .115. Guest MACs bc:24:11:*.
+PDU Mgr: PROD=VM156@.156; VM154 off fallback. Rev4 asset API + 409 guard + pdu_manager_client live. Pipeline: prod env → LXC130 runner → SSH pdurunner@VM156.
 §
-VM149 @.165 llama-server :8000 alias startupteams/llamacpp (Qwen3-4B; 27B CPU lane measured 0.8 t/s = useless).
+STNA-88 lessons: ADF headings = type:heading+attrs.level (heading2 INVALID→400). Unit-green/live-400 class ×3 → live write probe per acceptance run. Hermes 0.19 approval: /v1/runs/{id}/approval {choice: session|once|always|deny}; pre-authorize dispatch tool.
 §
-Jordan: grants broad server autonomy (break OK — document, fix, don't stop); live handover .md; questions before NEW plans then full autonomy; deliverable = single .md in work folder + Telegram upload.
-§
-MARION infra: LLM Mgr VM114@.108 (v0.11.0); PG CT115@.116; LLDAP@.101. Workspace ~/.llm-manager-v011 (pve.py, creds 0600). PVE: guest-exec arg[]+poll; GET=querystring; LXC exec 501; VM114 qga can wedge.
-§
-Agent Mgr V2 live: VM114 :8200 (systemd agent-manager), nginx /agents/, schema agentmanager@CT115, template 305. BLOCKER: PVE token clone-403 (root works) — Jordan console fix. Skill: agent-manager-vm114.
-§
-Hermes local-models: router llm-manager.marion-ia-usa.internal/v1 (cert in venv certifi), custom:marion. max_tokens=16384. tools.tool_search.enabled='on' (string) or 70K models overflow.
-§
-FlashNext 09-24: BLOCKED — vllm 0.30 caps Qwen4Exp TP<=4 (PP banned by PLE; TP6 fails GDN 16 k-heads); 76 GiB weights vs ~18.2 usable/GPU. PLE CPU-offload works (DP1 pinned 47.8 GiB). Loader fails unfused AWQ-gemm under TP. VM102@.168 (off) holds model disk while stopped; VM103 prod restored after riser AER wedge→host reboot. Handoff ~/flashnext-miam00111-20260924/.
+MCP SDK: dotted tool names need direct registry insert (GatewayTool subclass, run() override + args contextvar); zero-param templates hit SDK walrus bug → statics CONCRETE. `hermes mcp test <name>` = fast probe.

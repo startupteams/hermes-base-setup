@@ -1,0 +1,27 @@
+# Headless guest provisioning via API only — console automation dead-ends and the working path
+
+Proven 2026-09-26 (ACMS first live deployment on MIAM-00135, PVE 9.2.20, agent driven entirely from a LAN Hermes box with no SSH to nodes). Use when you need to provision a guest that runs a real service (Docker stack) with no human at a console.
+
+## Console automation is a DEAD END via the PVE API on 9.2 — do not burn cycles
+
+1. **LXC termproxy + vncwebsocket: SILENT.** `POST /nodes/<n>/lxc/<id>/termproxy` succeeds (returns port 5900+ and a ticket); the vncwebsocket handshake over `wss://<api-host>:8006/...` completes (HTTP 101, `Sec-WebSocket-Protocol: binary`), ws PING/PONG works — but zero bytes of terminal data ever arrive. Newlines, auth frames (`root@pam\0` + ticket, text and binary opcodes), resize frames: nothing. Root cause observed: the CT console has no active getty on the socket (fresh template CTs).
+2. **VM vncproxy (RFB): completes handshake then dies on protocol.** The handshake chain works: `POST /nodes/<n>/qemu/<vmid>/vncproxy {websocket:1}` → connect via `Sec-WebSocket-Protocol: binary` on the API host:8006 → RFB 003.008 banner → server offers security type **2 (VNC password)** → the 16-byte challenge arrives → respond with DES-ECB of the challenge using the **bit-reversed 8-char password from the vncproxy response's `password` field** (cryptography TripleDES with bit-reversed key bytes; deprecated `hazmat.decrepit.ciphers.algorithms.TripleDES` import) → auth result 00000000 = OK → ClientInit share=1 → ServerInit arrives (`VNC Command Terminal`, ~744x400). **Then ANY SetEncodings message (raw, or PVE custom -313/-312) → server closes the connection (broken pipe).** PVE's terminal VNC is a proprietary protocol; raw RFB clients cannot drive it. SendPixelFormat alone does not kill it; SetEncodings does — and without encodings you get no framebuffer and no keyboard path.
+3. **Ubuntu desktop-server ISO install (subiquity) is not drivable** through either path; no autoinstall seed can be injected without editing the ISO boot entry at the console.
+
+## The reliable path: LXC with ssh-public-keys at create + SSH in
+
+- `POST /nodes/<node>/lxc` with `ssh-public-keys=<key>` (single line), `password=...`, static `net0 ip=.../24,gw=...`, `unprivileged=1`, `features=nesting=1,keyctl=1` (nesting+keyctl required for Docker-in-LXC), `onboot=1`, `start=1`. Ubuntu 24.04 CT template ships **sshd enabled** (VMs from cloud images may not start sshd that fast).
+- Poll `GET /nodes/<n>/lxc/<id>/interfaces` for the IP; ARP may cache a **stale MAC from a previously destroyed guest on the same IP** — `ip neigh del <ip> dev eth0` on your box and re-probe before concluding the guest is down. TCP :22 may take ~30s to accept.
+- **Host-key churn trap:** recreating a CT on the same IP invalidates the old SSH host key → all clients fail with host-key-verification. `ssh-keygen -R <ip>` (or `-o StrictHostKeyChecking=accept-new`) on EVERY client that talked to the old instance.
+- Then standard guest setup over SSH: apt install docker.io docker-compose-v2 git; clone repo at exact commit; secrets in 0600 env file; deploy.
+
+## Other API-only provisioning lessons (same session)
+
+- **PVE 9.2 has NO disk-image import API** (`POST /storage/<store>/import` → 501 on both source and target stores), and `download-url` accepts content types `iso`/`vztmpl` (400 on `snippets`/others — the error is just "Parameter verification failed", so probe content types individually). A downloaded cloud-image `.img` lands in the iso dir but attaching it by absolute path gets reinterpreted as `media=cdrom` — dead end for disk-seeding without node shell.
+- **`dev0: /dev/...` passthrough works on LXC create** (block device into an unprivileged CT), but with no `lxc exec` API and a silent console there is no way to run commands inside → the helper-CT trick fails too.
+- **VMIDs are cluster-global** — `qmcreate` fails with `VM 121 already exists on node 'miam00111'` even though that VM didn't appear in the per-node listing you checked; enumerate the FULL cluster guest list (`/cluster/resources` or per-node queries across all nodes) before choosing a VMID.
+- **ISO upload via API is multipart** (`POST /nodes/<node>/storage/local/upload`, `content=iso` + `filename=` file part); the returned UPID may run on the API host node (miam-00100), not the target — poll that node's task status. Seed-ISO building locally: `pycdlib` with `interchange_level=3` + `rock_ridge='1.09'` + `joliet=True`, volume label `cidata`; keep temp source files alive until `write()` returns (pycdlib re-opens them lazily).
+- **No DNS for `*.home.arpa` anywhere on MARION** (OPNsense unbound has no local overrides) — service URLs by raw IP; `/etc/hosts` entries on clients are the interim convention.
+- **Self-signed TLS** (openssl req -x509 with SAN `DNS:<name>,IP:<ip>`, 825d) is the accepted stopgap when no internal CA exists — document it in the handoff, don't block on a CA.
+- **PBS backup inclusion check:** `GET /cluster/backup` — a job with `all:1` covers new guests unless their VMID is in `exclude`. Prove coverage with an immediate manual `POST /nodes/<node>/vzdump {vmid, storage: pbs-marion, mode: snapshot, compress: zstd}` and confirm the snapshot volid appears in the PBS datastore content list.
+- Destroy intermediates when the approach changes (VMs, helper CTs, downloaded images/ISOs) — this session left orphaned test guests from abandoned console-automation attempts that had to be cleaned up.

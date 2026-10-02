@@ -68,6 +68,17 @@ two lines: username, password; default `~/.pve_ldap_bot`; cluster endpoint overr
   path is VM-only. For CT internals use SSH/node-shell (`pct exec`), or reach the CT's
   services over the network from a VM that has the tooling (e.g. install
   `postgresql-client` on the app VM and dump remotely instead of exec'ing into the DB CT).
+- **`pct exec <id> -- bash -c "<script>"` breaks on complex scripts** (2026-09-30 inventory
+  sweep): the script text crosses TWO shell layers (node SSH + pct exec), and `$`/backtick/quote
+  escaping that survives both is fragile — batched scans silently returned 59-byte empty outputs
+  with no error. Working pattern: base64 the script → write it to node `/tmp` → run it INSIDE
+  the CT from a file via stdin: `echo <b64> | base64 -d > /tmp/s_<id>.sh && pct exec <id> --
+  bash < /tmp/s_<id>.sh > /tmp/out_<id>.txt 2>&1; cat /tmp/out_<id>.txt`. Also: `pct exec` does
+  NOT reliably forward a piped stdin from the SSH command line — always go through a node-side file.
+- **Long guest commands through qga exec: run detached + result file.** qga exec (CLI or API)
+  blocks ~2 min and times out on sleeps. For "wait N seconds then report" probes, dispatch
+  `nohup bash -c '... > /tmp/result.txt 2>&1 &'` (returns "started" immediately), then poll with
+  a second exec that cats the result file.
 - **Root@pam ticket via `/access/ticket` works from a Python urllib client** when the
   bash+curl path is unavailable (no jq / curl quirks) — same urlencoded form
   (`username=root@pam`), same cookie/CSRF handling, self-signed TLS needs an
@@ -313,6 +324,16 @@ with all flags, Restart=on-failure, TimeoutStartSec generous for model load), th
   returns `{data:{result:[...]}}` — iterate `data['result']`, NOT `data`. Verified vLLM
   VM IP map 2026-09-11: VM103→10.0.20.161, VM401→.162, VM109→.163, VM111→.164, VM149→.165.
 
+## Creating a VM from a vendor cloud image (Debian/Ubuntu genericcloud)
+
+Recipe in `references/pve-cloud-image-vm-creation.md` (proven 2026-09-27, VM156).
+Headlines: `download-url` rejects `checksum: "auto"` (needs the real sha256 + explicit
+`checksum-algorithm`) and rejects `.qcow2` (rename `.img`); the storage-content import API
+does NOT support `import-from` on PVE 9.2 → use node SSH (paramiko + `~/.miam_root_pass`;
+BatchMode ssh lacks the key) + `qm importdisk`; **cloud-init `--sshkeys` alone failed on
+Debian 12 genericcloud — set `--cipassword` too and stop+start** (regenerates the CI ISO)
+before debugging further.
+
 ## ConnectX-5 / mlx5 SR-IOV VF passthrough for guest RDMA (proven 2026-09-13, MIAM ring)
 
 Full session recipe: `references/cx5-sriov-guest-rdma.md`. Ready runners: `scripts/cx5_miam_ssh.py` (node shell) + `scripts/cx5_vm_exec.py` (guest exec). Summary of the working pattern:
@@ -327,6 +348,18 @@ Full session recipe: `references/cx5-sriov-guest-rdma.md`. Ready runners: `scrip
 - **Guest:** VFs present as CX5-Ex VF (15b3:101a), mlx5_core binds, RDMA device names vary per guest (`mlx5_N` vs `rocep<iface>` — always enumerate with `ibv_devices`). Perftest needs explicit `-d <dev> -x 3` when multiple devices exist (defaults to first). Guest VF interfaces come up DOWN with no config — `ip link set mtu 9000 up` + temp IPs, same as PF passthrough.
 - **Line-rate result:** guest VF ↔ host PF and guest VF ↔ guest VF both ~95–97 Gb/s on 100G legs; NCCL selects `NET/IB ... RoCE` over VFs with no tuning beyond interface up + IPs.
 - **Background servers inside guests:** `nohup ... &` alone dies under `qm guest exec`; use `setsid nohup ... < /dev/null &` then `pgrep` to confirm alive.
+
+## PBS backup coverage audit + safe restore tests (proven 2026-09-26)
+
+Full methodology in `references/pbs-backup-verification-audit.md`; read-only one-pass collector in
+`scripts/pbs_coverage_audit.py` (guest inventory + job scope + PBS snapshot/verify state + newest
+backup ages). Headline traps: PBS snapshots API rejects `?limit=` (HTTP 400); **vzdump of a STOPPED
+VM with GPU-passthrough hostpci lines auto-starts kvm** → `PCI device already in use by VMID`
+against the VM holding those devices (one failing guest per night, "job errors" on that node);
+exclude the PBS datastore dataset from recursive host ZFS auto-snapshots (double retention); a
+restored CT/VM carries the ORIGINAL net0/production IP — set `ip=manual` + `onboot=0` before any
+boot (or verify via read-only qemu-nbd mount without booting); all-zero PBS GC stats usually mean
+"first GC slot not reached since install", not corruption.
 
 ## Proxmox Backup Server on a PVE host (+ real restore proof)
 
@@ -375,6 +408,18 @@ blaming the NIC — MIAM's `0000:00:01.1` AER was an RTX 3080 riser, not the Con
   drive installs/restores through a tiny Python wrapper that imports `noderun.run` and passes
   `timeout=NNN`, or the SSH read loop gives up and returns empty output.
 
+## Caddy container config changes (admin API off — VM119 dashboard pattern)
+
+- If the Caddyfile declares `admin off`, `caddy reload` (including
+  `docker exec <caddy> caddy reload --config /etc/caddy/Caddyfile`) FAILS with
+  `Post "http://localhost:2019/load": connection refused` — there is NO hot-reload path.
+- Single-file bind mount (`./Caddyfile:/etc/caddy/Caddyfile:ro`) pins the inode (same class as
+  the nginx single-file mount trap above): after editing the host file, `docker compose up -d caddy`
+  reports "Running" and does NOTHING — the container keeps serving the OLD config. Always verify
+  with `docker exec <caddy> grep -c <new-token> /etc/caddy/Caddyfile` (expect the edit count).
+- Working change path: edit file → `docker compose up -d --force-recreate caddy` (~2s blip) →
+  grep-verify inside the container → external probe. Keep a dated `.bak` next to the file first.
+
 ## NVIDIA GPU passthrough + driver qualification (GDI)
 
 Use for passing NVIDIA GPUs to Proxmox VMs and qualifying the NVIDIA driver (R580 Open, etc.)
@@ -398,6 +443,34 @@ Key points (full recipe in `references/gdi-gpu-driver-qualification.md`):
   never the reference node's kernel.
 - `_OSC: platform does not support [AER LTR DPC]` boot lines are benign on AMD Threadripper —
   exclude them from PCIe-fault grep.
+
+### Cloning a golden template into a fleet: offline storage-migrate + template-baked network traps (2026-10-01)
+
+- **Offline (STOPPED-VM) storage-migrate is the cross-CPU-safe way to move a
+  `cpu=host` clone between nodes with different CPUs** — the VM boots on the
+  DESTINATION's CPU. `POST /nodes/{src}/qemu/{id}/migrate` with
+  `{target, targetstorage: <dst-storage>}` (pass `targetstorage` whenever the
+  source storage isn't active on the destination, else 500). 200G thin clones
+  copy allocated blocks in ~5–15 min; run several in parallel. There is no
+  usable cpu-models endpoint (501) — the qmigrate preflight IS the compat
+  check. Track tasks via `/nodes/{src}/tasks/{upid}/status` until
+  `status=="stopped"`; **`exitstatus=="OK"` is the success signal — a poller
+  that treats `stopped` as failure misreads every finished task.**
+- **Check what a template actually BAKES IN before mass-cloning** (read
+  `/etc/netplan/*` + `ls /home` inside one clone after first boot): PVE
+  `ipconfig0: ip=dhcp` is COSMETIC when cloud-init is disabled in the image —
+  the golden template can still pin a STATIC netplan IP, and every clone boots
+  into an instant collision with the live original (ARP flaps between clone
+  MACs; every app-level check still passes). Also verify which runtime the
+  image carries vs what you assume (template had legacy st-agentd only; the
+  Hermes runtime lived only in the manually-provisioned original).
+- Clone re-identification on EVERY clone: machine-id
+  (`systemd-machine-id-setup`; the "from VM UUID" stderr is fine — UUIDs
+  diverge), ssh host keys (`dpkg-reconfigure openssh-server` / `ssh-keygen
+  -A`), hostname, and a rewritten netplan with a VERIFIED-free static IP
+  (ping sweep from a LAN host that isn't ICMP-firewalled + `ip neigh` on that
+  host, MACs cross-checked against each clone's real `net0` MAC). `chmod 600`
+  the netplan file (world-readable YAML = apply-time warning noise).
 
 ### PITFALL: Mellanox CX5 dual-function vfio handoff wedges the card — D3cold, "invalid PCI interrupt pin 255" (2026-09-12, hit on all 3 ring nodes)
 
@@ -470,7 +543,7 @@ This usually means PDM has authentication working but ACL/resource permissions a
 - user-specific `GET /access/permissions` includes expected paths such as `/`, `/access`, `/resource`, `/system`;
 - at least one PDM remote exists and resources are visible via `/resources/status` and `/resources/list`.
 
-### LLDAP: password setting, memberOf, and default ACLs (v0.6.x realities)
+### LLDAP: password setting, memberOf, and default ACLs (v0.6.x realities; corrected 2026-09-26)
 
 - **No admin password-reset exists** — not in the GraphQL API, not as a CLI tool. Working
   path: bind as `uid=admin,ou=people,<base>` over LDAP :3890 and run the **password-modify
@@ -481,14 +554,22 @@ This usually means PDM has authentication working but ACL/resource permissions a
 - **Regular users see only themselves in the directory** (default ACL; no ACL section in the
   config). A service bind account created for user lookup CANNOT search `ou=people` until it
   joins the built-in `lldap_strict_readonly` group.
-- **LLDAP does not expose `memberOf` over LDAP** (groups are virtual, GraphQL-only). App code
-  doing role lookup must search `ou=groups,<base>` with `(member=<userDN>)` and read `cn` —
-  filtering user attributes for `memberOf` returns ABSENT and silently breaks login→role
-  mapping ("no role assigned" errors with a valid password).
-- GraphQL arg shapes differ by version: `createGroup(name: ...)` returns `Group { id }` (not
-  `ok`); `addUserToGroup(userId:, groupId:)` returns `Success { ok }`;
-  `createUser(user: CreateUserInput!)` takes a variable, not inline args. Introspect before
-  scripting.
+- **CORRECTION (2026-09-26, live ACMS deployment): LLDAP DOES return `memberOf` over plain
+  LDAP :3890 when explicitly requested** (bind as a service account in
+  `lldap_strict_readonly`, `conn.search('ou=people,<base>', '(uid=x)',
+  attributes=['memberOf'])` → list of group DNs). The earlier "memberOf is GraphQL-only"
+  claim was an ldap3 ACCESS-pattern failure, not an LLDAP limitation. The real trap is the
+  ldap3 client API: **`entry.attributes.get('memberOf')` raises
+  `LDAPCursorAttributeError: attribute 'attributes' not found`** (ldap3's Entry intercepts
+  attribute access). Use **`entry.entry_attributes_as_dict.get('memberOf', [])`** — this
+  works and is what shipped in the ACMS UI fix. Also verify the BASE DN via rootDSE first
+  (`namingContexts`) — the MARION LLDAP still runs the default `dc=example,dc=com`, and
+  binding with a guessed base gives "Not a subtree of the base tree".
+- GraphQL arg shapes differ by version: `createGroup(name: ...)` returns the group (proven
+  2026-09-26: acms-admin/workers/observers created this way); `addUserToGroup(userId:,
+  groupId:)` returns `Success { ok }`; the group-detail query arg is **`group(groupId: N)`,
+  NOT `id`**; `createUser(user: CreateUserInput!)` takes a variable, not inline args.
+  Introspect before scripting.
 - **Group membership WRITES go through GraphQL only (proven 2026-09-13).** The LDAP port
   3890 is effectively read-only for group membership: an ldap3 `MODIFY_ADD` on a group's
   `member` attribute as an lldap_admin user fails with `session terminated by server` (and
@@ -734,15 +815,35 @@ Userspace NFS avoids privileged-LXC/kernel-NFS compromises. Traps hit 2026-09-11
 - **Streaming quirk of the fleet's custom vLLM forks (`vllm-0.28.0-*`):** streamed chunks carry `delta.reasoning` (NOT the standard `delta.reasoning_content`) for reasoning models. Any TTFT/tok-s benchmark that only checks `content`/`reasoning_content` silently records null throughput on qwen3.6/qwen3.8 endpoints. Reusable benchmark runner: `scripts/stream_bench.py` (handles reasoning/content deltas, returns TTFT + tok/s + latency).
 - Old-model benchmark hygiene (Jordan's directive 2026-09-23): if a model family may be deprecated/broken, cap old-model work at ~1 hour and prioritize the new/target model — baselines can be captured retroactively. Pause at natural checkpoints (e.g. after benchmarks) when the owner signals incoming steering.
 
+- **Power-cycle latency: an outlet verified OFF does not mean the node died instantly** (learned 2026-09-27, authorized 00119 PDU test). A node can stay pingable ~25s+ after its PDU relay reads OFF (PSU holdup). A fast ping loop showing "still up" right after cutting an outlet is NOT evidence of a wiring mismatch — wait 30s+ minimum, and verify the node is REALLY down (PVE API unreachable + ping dead) before drawing wiring conclusions.
 ### PITFALL: raw urllib calls to node APIs need the /api2/json prefix
 
 Calling `https://<node>:8006/nodes/<node>/qemu` directly (or through any client that doesn't prepend it) returns `HTTP 500: no such file '/nodes/<node>/qemu'` — this looks like a broken cluster/permission issue but is purely a missing `/api2/json` prefix. The skill's `pve_api.py` wrapper handles it; hand-rolled urllib clients must prepend `/api2/json` to every path. Symptom signature: the SAME path worked minutes earlier in a different client → suspect prefix difference first, not cluster state.
+
+### vzdump of a promotion VM before cutover + task-UPID polling pattern
+
+One-time pre-cutover backup: `POST /nodes/<n>/vzdump` body `{"vmid": "...", "storage": "pbs-marion", "mode": "snapshot", "zstd": "1"}` → returns `{"data": "UPID:..."}` (a plain STRING, not a dict). URL-encode the UPID (`replace(":", "%3A")`) when polling `GET /nodes/<n>/tasks/<upid>/status` until `status != "running"`, then check `exitstatus == "OK"`. Verify the snapshot landed via `GET /nodes/<n>/storage/pbs-marion/content?content=backup` (newest ctime for the vmid). The daily all-guests job covers new guests automatically (excluded-list model), but a fresh pre-cutover snapshot is still worth one API call.
 
 ## Node identity & evidence hygiene
 
 - `hostname -s` guard at the top of every remote script (`[[ "$(hostname -s)" == <node> ]] || exit 1`).
 - Save every phase (SMART dumps, qualification, erase log, pool-create log, dataset log) as timestamped files under a phase dir with `umask 077`; quote only `SERIAL_CHECK_EXIT`-style rollups in chat.
 - `pct list`/`lvs` output tells you where a CT's disk actually is — after migration it's gone from the source's LVS; check the destination's `pct list` instead of assuming.
+
+### Guest start/stop: the API token CANNOT do it — use node SSH (proven 2026-09-27)
+
+The LLDAP bot API token (which handles reads, exec, config fine) gets **501 "Method not implemented"** on `POST /nodes/<n>/qemu/<id>/status/start|stop` and `/lxc/<id>/start` — the token lacks lifecycle perms and there is no error hint that it's a permission issue (it reads as an endpoint that doesn't exist). Working path: root SSH to the node (`~/.miam_root_pass` works for miam-00133/.135) and run `qm start <id>` / `pct start <id>` directly.
+
+### onboot=1 guests may NOT auto-start after a node power-cycle (verified 2026-09-27)
+
+`miam-00135` power-cycled (twice, unplanned) with several `onboot=1` guests (VM114, VM120, CT122) — **none of them came back up** after either boot. PVE's startall either didn't survive the rapid repeated cuts or has startup-order timing that failed silently. Rules:
+- After ANY node power event, enumerate guest states (`qm list`, `pct list`) and explicitly start what should be running — never assume onboot handled it.
+- Docker-compose services inside a started guest may ALSO need manual re-raise: the ACMS stack's containers did not auto-start with docker.service; recover with `docker compose --env-file /opt/acms/.env -f <repo>/deploy/compose.yaml up -d` (compose reads the env file from the project root, NOT `-f <path>` alone — a `-f` invocation from elsewhere errors `required variable X is missing a value`).
+- Record pre-incident guest-state expectations in handoffs so post-recovery verification is objective.
+
+### New LXC creation: template availability is per-node local storage
+
+Creating a CT on a node fails with `volume 'local:vztmpl/<template>' does not exist` if that node's `local` storage lacks the template — templates on OTHER nodes (miam-00147) don't help (local storage is node-local). Fix via `POST /nodes/<n>/storage/local/download-url` with the official repo URL (e.g. `http://download.proxmox.com/images/system/debian-12-standard_12.12-1_amd64.tar.zst`); a stale version URL 404s with `exit code 8` in the task. Then `POST /nodes/<n>/lxc` normally (`ssh-keys` key is NOT in the CT-create schema — use `password`).
 
 ## PVE host shell via API console
 
@@ -765,3 +866,43 @@ Use when the GUI shows “No valid subscriptions” or asks to visit `pdm.proxmo
 - Tell the user to hard-refresh the browser (`Ctrl+Shift+R`) because the old bundle may be cached.
 
 See `references/pdm-deployment-and-postinstall.md` for the concrete session recipe and API endpoints used.
+
+## MIAM dashboard stack + Tailscale access references
+
+- `references/miam-service-registry.md` — VM119 Service Registry API contract (bearer tokens,
+  SHA256-at-rest, PATCH = full-record replace), reconciler→Kuma/Homarr sync behavior, and the
+  Homarr API-key human gate.
+- `references/homarr-kuma-api-protocols.md` — VERIFIED wire protocols for Homarr v1.x (ApiKey header,
+  tRPC board.saveBoard replace-semantics) and Uptime Kuma 2.5.5 (object login, add/editMonitor/
+  monitorList-event, websocket transport). Consult BEFORE touching either API — v1 lore and the
+  pre-2026-09-30 reconciler code are wrong on both.
+- `references/tailscale-subnet-access.md` — subnet-router inventory recipe, the unmasqueraded
+  CGNAT-source reality that dictates allowlist changes, split-DNS path, and client test ladder.
+
+### PITFALL: "sync succeeded" logs that count inputs, not outcomes (2026-09-30, hit live)
+
+The old reconciler logged `kuma: monitors ensured (34)` where 34 = `len(services)` — a count of DESIRED
+inputs, while the DB actually held ZERO monitors (its login had never worked). A full session trusted that
+log and shipped a false "34 monitors reconciled" claim. Rules for ANY reconciler/sync tool:
+- Log `created=X updated=Y unchanged=Z errors=E` with per-item ack checks — never a bare count of inputs.
+- Verify sync success by READING BACK the target's actual state (DB count / list event) and diffing against
+  desired; report the diff, not the input count.
+- A success log whose number happens to equal the input count is a red flag, not evidence.
+
+### PITFALL: re-IP a guest → grep the guest's SERVICE configs for the old IP too (ganesha Bind_Addr, 2026-09-30)
+
+A CT118 re-IP updated PVE net0 + `/etc/network/interfaces`, but `nfs-ganesha` then FAILED with
+`FATAL: Error binding to V6 interface` (exit 2) — its `/etc/ganesha/ganesha.conf` pinned
+`Bind_Addr = 10.0.20.156;`. The network-config grep (§18-style discovery) missed it. Rule: after any
+re-IP, `grep -rn "<old-ip>" /etc` INSIDE the guest (service configs, daemons, app settings), not just the
+network files, before declaring the change complete.
+## LLDAP: password setting, memberOf, and default ACLs (v0.6.x realities — from MIAM-00101 instance, preserved 2026-10-02)
+
+- **LLDAP does not expose `memberOf` over LDAP** (groups are virtual, GraphQL-only). App code
+  doing role lookup must search `ou=groups,<base>` with `(member=<userDN>)` and read `cn` —
+  filtering user attributes for `memberOf` returns ABSENT and silently breaks login→role
+  mapping ("no role assigned" errors with a valid password).
+- GraphQL arg shapes differ by version: `createGroup(name: ...)` returns `Group { id }` (not
+  `ok`); `addUserToGroup(userId:, groupId:)` returns `Success { ok }`;
+  `createUser(user: CreateUserInput!)` takes a variable, not inline args. Introspect before
+  scripting.

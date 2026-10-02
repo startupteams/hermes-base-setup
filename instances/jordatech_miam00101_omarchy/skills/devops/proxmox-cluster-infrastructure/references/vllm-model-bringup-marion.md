@@ -38,21 +38,21 @@ is not in the never-reboot list). Do NOT keep cycling a wedged GPU VM.
 
 ## vLLM 0.30.0 Qwen4Exp (Flash-Next-class models) — hard constraints, measured
 
-- **PP>1 is banned**: `NotImplementedError` — PLE/n-gram embedding needs raw input_ids that
-  non-first pipeline ranks never receive. Any TPxPPy topology for these models is dead in upstream.
-- **TP ceiling 4**: full-attn KV heads=2 replicate to TP4; GDN `linear_num_key_heads=16` fails
-  TP6 divisibility. Six-GPU plans are unreachable in upstream code.
-- **PLE CPU offload works**: `VLLM_PLE_CPU_OFFLOAD=1` (default) + DP1 → ONE pinned-host copy
-  (~48 GiB FP8) via UVA lookup. The old DP-replication OOM chain is bypassed by DP1.
-- `--cpu-offload-gb N` (UVA weight offload) exists and works on SM86, but only buys ~4 GiB/GPU.
-- **Loader gap**: `RoutedExperts` cannot load unfused per-expert AWQ-gemm checkpoints under TP
-  (dim mismatch in `_load_w2`); it expects fused `w13_weight`/`w2_weight` params. Dual-format
-  artifacts (index = AWQ-gemm experts, sidecar `official-fp8-ple-*` shards ALSO carrying unindexed
-  FP8 `weight_scale_inv` expert duplicates) trip `AttributeError` — loader iterates all
-  safetensors files, not just index entries.
-- On failure, ALWAYS capture the true root-cause line: grep for `NotImplementedError`,
-  `AttributeError`, `OutOfMemoryError` OUTSIDE the multiproc-executor wrapper noise
-  (`grep -v "944"`), and walk the innermost `File ... line N, in` frames.
+- **UPSTREAM (stock 0.30.0) bans** — all three were V2 blockers, ALL CLEARED 2026-09-24 by the
+  todiadiyatmo community overlay (see next section):
+  - **PP>1 banned**: `NotImplementedError` — PLE/n-gram embedding needs raw input_ids that
+    non-first pipeline ranks never receive. (Overlay fix: #54709 placement-based gate — PP>1
+    allowed when every PLE layer lives on pipeline rank 0. PLE at layer 1 → always rank 0.)
+  - **TP ceiling 4**: full-attn KV heads=2 replicate to TP4; GDN `linear_num_key_heads=16` fails
+    TP6 divisibility. (Overlay + different topology sidesteps: TP2×PP3 uses all 6 GPUs.)
+  - **Loader gap**: `RoutedExperts` cannot load unfused per-expert AWQ-gemm checkpoints under TP
+    (dim mismatch in `_load_w2`). (Different ARTIFACT sidesteps: AutoRound/INC checkpoint with
+    GPTQ-packed per-expert weights → `--quantization inc` → MARLIN WNA16 MoE backend, no patches.)
+- **PLE CPU offload works**: `VLLM_PLE_CPU_OFFLOAD=1` + DP1 → ONE pinned-host copy (~51 GB FP8),
+  `pinned=True, weight_device=cpu` on the PP0/TP workers only. Host in use 83-85 GiB of 106.
+- Benign during 70K profiling: expandable-segments `OOM ... memory mapping failed` WARNINGS that
+  retry and recover (recipe-documented). Do NOT abort the boot on these — wait for
+  "Application startup complete".
 
 ## Two-loader diagnostic pattern (fast triage)
 
@@ -63,6 +63,44 @@ is not in the never-reboot list). Do NOT keep cycling a wedged GPU VM.
 2. If it's a shape/name error in weight loading, print the expert mapping
    (`build_expert_params_mapping(...)` in the live venv) and compare param names vs checkpoint
    tensor names — name-mapping mismatch vs TP-narrow mismatch look similar in tracebacks.
+
+## Community-overlay serving pattern (V3, proven 2026-09-24 — Flash-Next LIVE on 6×3080)
+
+The winning V3 sequence, when stock vLLM hard-bans an architecture:
+
+1. **Zero-prod-impact staging while prod keeps serving:** stop the test VM (GPUs stripped),
+   shrink its RAM to 8G (host only has ~12G free beside prod), attach a dedicated artifact disk,
+   boot GPU-less, and do ALL slow work (docker pull, image build, 115 GB checkpoint download,
+   flat-copy) with zero prod risk. Only the actual test needs the GPU handoff.
+2. **GPU handoff sequence with LLM Manager** (the handoff itself): set BOTH
+   `desired_power_state='STOPPED'` + `desired_service_state='MAINTENANCE'` on the hosts table →
+   `qm stop <prod>` → verify STAYS stopped → restore test VM's hostpci + RAM → `qm start <test>`.
+   (See marion-vllm-bench-ops SKILL.md for the dual-trigger recovery pitfall that bit here.)
+3. **GPUs missing after boot = kernel/module drift, not a passthrough failure.** `lspci` inside
+   the guest showed all 6 GA102s while `nvidia-smi` failed: kernel had auto-updated to 6.8.0-142
+   but `linux-modules-nvidia-580-open-*` existed only for -139. Fix WITHOUT reboot:
+   `apt-get install linux-modules-nvidia-580-open-$(uname -r) && modprobe nvidia nvidia_modeset nvidia_uvm`.
+   (Same VM401 trap; third occurrence. Kernel pinning still not implemented fleet-wide.)
+4. **Clone's fstab may remount a model disk at the template's old path after reboot**
+   (VM102's clone kept `/dev/sdb → /opt/hf-cache-030 nofail` from VM103's template). The 115 GB
+   artifact survived; fix = umount, remount at intended path, sed the fstab line. Audit the fstab
+   of any clone that carries a disk.
+5. **Mount HF checkpoints FLAT for docker:** snapshot dirs are symlink farms into `../../blobs/`;
+   a read-only bind mount of the snapshot breaks them. `cp -rL <snap>/. <flat>/` (231G of 393G used).
+6. **nvidia-container-toolkit install from nvidia.github.io fails on 24.04** (unsigned InRelease).
+   Install from GitHub release tarball instead: `nvidia-container-toolkit_<v>_deb_amd64.tar.gz` →
+   extract → `dpkg -i` the 4 core debs (libnvidia-container1, -tools, toolkit-base, toolkit) →
+   `nvidia-ctk runtime configure --runtime=docker` → restart docker (systemctl reset-failed if
+   start-limit-hit after churn).
+7. **Serve via python -c, not the console script** (see marion-vllm-bench-ops skill for the
+   Invalid-repository quirk). Working launcher: `/opt/hf-fork/run_stage.sh` on VM102, with
+   MAXLEN/SEQS env knobs.
+8. **Proven results (70K ctx, 8K prompts, 256 gen):** C1 37.9 / C2 40.8 / C4 23.9 / C6 23.4 /
+   C8 18.9 tok/s per agent (C8 aggregate 150.6). KV pool 665K tokens. ≥20 tok/s/agent met at
+   C4-C6. MTP n=2 and FP8 KV are in the image but untested — biggest remaining wins.
+   Full detail: `/home/jordatech/flashnext-v3-20260924/HANDOFF-QWEN38-FLASHNEXT-V3-20260924.md`.
+   Reusable bench harness (C1-C8, streaming, reasoning-delta aware): `scripts/bench_ladder.py`
+   (`python3 bench_ladder.py <port> <max_conc> <prefix>` — writes incremental JSON + VRAM/RAM samples).
 
 ## Production restore checklist (proven)
 

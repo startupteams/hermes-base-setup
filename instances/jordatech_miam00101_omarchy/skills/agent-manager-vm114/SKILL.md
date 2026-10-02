@@ -5,6 +5,16 @@ description: Agent Manager V2 on VM114 (10.0.20.108) — architecture, paths, au
 
 # Agent Manager V2 — VM114 deployment notes (created 2026-09-14)
 
+> **⚠️ SUPERSEDED (2026-09-27/28).** Provisioning moved to the Agent Runtime
+> Manager (ARM) inside Server Manager (`server_manager/` on :8300, ADR-0011);
+> semantic work (projects/work_items/runs/plans/sessions/messages) moved to
+> ACMS by boundary. Legacy AgentManager runs read-only-safe with deprecation
+> pending — per-endpoint replacement map:
+> `llm-manager-project-framework/docs/legacy-agentmanager-parity-matrix.md`
+> + TDR-0010. Runtime lifecycle now goes ACMS → SM → ARM reconciler; never
+> provision or destroy through this legacy path. The PVE token clone-ACL quirk
+> below is historical context only (ARM owns cloning now).
+
 ## Architecture (ADR-0001/0002)
 - Separate FastAPI app on **127.0.0.1:8200**, systemd unit `agent-manager.service`, deployed at `/opt/agent-manager/main_am.py`. Source of truth local: `~/.llm-manager-v011/agent-manager/main_am.py` (push via `push.py` pattern).
 - DB: `agentmanager` **schema** (not database) inside CT115 `llmmanager` DB — llmmanager user lacks CREATEDB. Tables: agents, agent_access, plan_artifacts/versions, projects, work_items, runs, sessions, messages, audit_events, provisioning_jobs/steps. Connect with `options=-csearch_path=agentmanager,public`.
