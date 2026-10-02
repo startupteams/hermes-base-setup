@@ -55,6 +55,18 @@ Documented semantics: `/model <name>` is session-only; `--global` persists to co
 
 systemd user timers (Persistent=true): daily backup 02:30, portable-brain sync 03:00, update 03:15. The updater MUST run backup-hermes.sh first regardless of the daily backup. Keep a separate Hermes-cron sync job from going stale — if a sync has not fired recently, replace it with a timer.
 
+## Step 4b — Profile gateways and in-session restarts
+
+- Every Hermes profile runs its OWN gateway systemd unit: `hermes-gateway-<profile>.service` (`hermes-gateway.service` is only the default profile). Find it with `systemctl --user list-units | grep hermes` on the host that runs it — the profile gateway is often on a DIFFERENT host than the session you're in (e.g. VM906 hosts agent profiles).
+- Restarting a gateway from a session that runs ON that gateway is blocked by a self-kill guard. Restart over SSH from another host with `~/.local/bin/hermes --profile <profile> gateway restart`; teardown can take ~3 minutes, so run it with a generous timeout and then verify `systemctl --user is-active` + `gateway_state.json` (gateway_state, platforms) rather than trusting the command's output.
+- Before restarting: back up the profile `config.yaml`, record the checkout commit, and confirm the gateway's ExecStart/WorkingDirectory/HERMES_HOME point at the tree you actually changed (imports run from the working tree — branch choice matters, file content is what counts).
+
+## Step 4c — Session model pin + cloud-only failover config
+
+Standing behavior config for pinned-session model identity (full policy: `references/session-model-pin-and-failover.md`):
+- `model.pin_sessions: true` makes a session refuse ALL automatic model switching; only provider-side failures (timeout/5xx/overload/429) may trigger ONE bounded failover to `model.automatic_failover.cloud` (e.g. the LLM Manager cloud DeepSeek route). Malformed tool calls, context overflow, auth, billing all fail closed (stop + notify).
+- Keep local `fallback_providers` entries even when pinning: pinned main sessions can't reach them, but unpinned auxiliary work (compression model) still uses them.
+
 ## Step 5 — Delivery conventions for repair work
 
 Jordan's repair tasks run as: detailed Markdown worklog updated during execution + final handoff .md, committed and pushed to the designated repo/branch (checkpoint commits per validated phase, never one giant push), final `git rev-parse HEAD` == `origin/<branch>` verified. Never commit .env, auth.json, live DBs, or raw logs. The user prefers autonomous execution — non-blocking questions only; when a channel keeps failing, write the handoff instead of stalling.
