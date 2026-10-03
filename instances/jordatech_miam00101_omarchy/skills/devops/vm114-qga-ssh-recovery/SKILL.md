@@ -55,6 +55,42 @@ this build). Keep each exec minimal; nohup + log-poll for long operations.
 requires explicit human authorization. SSH provisioned 2026-09-28 makes this
 almost never necessary.
 
+## 5. QGA wedge is NOT VM114-specific (generalize)
+
+The wedge class recurred on **VM117 (2026-10-03)** mid-window: after a burst
+of long execs (heredoc writes + pip installs during provisioning), PVE flips
+to 500 "QEMU guest agent is not running" while the VM itself keeps running
+(status=running, agent flag=1, memory normal). Same behavior on VM114/VM120
+historically. General rules:
+
+- **Keep exec payloads SHORT** — write files with `~/bin/pve_qga.py write`
+  (sha-verified) and exec only brief commands; big heredocs through
+  `guest-exec` both wedge the channel AND time out (500 timeout on long
+  exec even before the wedge). **A guest-exec ending
+  `guest-exec failed - got timeout` is itself a wedge precursor — the agent
+  channel typically dies right after (VM117, 3× live 2026-10-03).**
+- Self-recovery is NOT reliable on hard wedges: VM117 stayed wedged 25–40 min
+  on three occasions; file-write nudges did NOT revive it. Re-probe with a
+  1-word exec after a few minutes, but don't wait long — go to reset.
+- **The working reset verb: `POST /nodes/{node}/qemu/{vmid}/status/reset`**
+  (host-side, no qga needed, plain API ticket auth). The bare
+  `POST .../qemu/{vmid}/reset` path is **501 Not Implemented** on this PVE
+  build. Reset reboots the VM (~60–75s); services/k3s pods recover from
+  persistent volumes — proven 4× on VM117 (2026-10-03) with zero data loss.
+  Human-gate still applies for non-disposable production VMs, but for
+  disposable/service VMs a hard wedge is a REASON to reset promptly (an
+  hour of dead management access costs more than the reboot).
+- Diagnostics before reset: `GET /nodes/{node}/qemu/{vmid}/agent` (the
+  agent-capability index) usually still answers while every channel 500s,
+  confirming qemu status=running + agent flag=1. `agent/get-osinfo` and
+  siblings are 501 here (not implemented). VM117 had NO staged SSH key
+  (template `stagent` key not provisioned for this profile; ssh →
+  Permission denied), so reset was the only recovery — stage an SSH key at
+  provision time for future VMs so a wedge never blocks management.
+- Prevention for future worker/service VMs: stage an SSH key at provision
+  time so qga wedges never block management access (VM124 got this via the
+  worker bring-up recipe; VM117 came up without one — lesson applied).
+
 ## Post-restart hygiene
 
 - `systemctl status qemu-guest-agent` "Memory: 3.9G" is cgroup page-cache from

@@ -60,7 +60,18 @@ Hermes gateway is connected to Telegram (check `gateway_state.json` → `platfor
 5. **Verify delivery**: confirm `ok: True` and that `file_size` matches the source byte count. Report message_id as proof.
 
 ## Pitfalls
+- **First choice is still the gateway MEDIA: tag** (skill
+  `autonomous-ai-agents/hermes-file-delivery`) — use THIS skill only when the
+  session is not on a gateway platform or the tag path is unavailable.
 - Use `sendDocument` (not `sendPhoto`) for `.md`/text files — preserves the file as a downloadable document.
+- **Simpler upload form (verified 2026-10-03):** stage the token to a 0600
+  temp file (never echo it), then
+  `TG_TOKEN=$(cat /tmp/.tgtoken); curl -s --max-time 30 -X POST
+  "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" -F "chat_id=${CHAT}"
+  -F "document=@${FILE}" -F "caption=<short caption>"` — the `-F` multipart
+  form works without the stdlib boundary script. Verify `ok: True` +
+  `file_size` matches the source byte count, then **`shred -u` the staged
+  token file** — never leave token copies in /tmp.
 - 50 MB upload limit per file; larger files need chunking or an external link.
 - The gateway process env has NO telegram vars (`/proc/<pid>/environ` is clean) — the token lives in Hermes' credential layer, only reachable via `get_env_value`.
 - `caption` max 1024 chars; keep it a summary, put details in the file.

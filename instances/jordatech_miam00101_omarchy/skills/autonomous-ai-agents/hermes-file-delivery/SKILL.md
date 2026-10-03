@@ -1,6 +1,6 @@
 ---
 name: hermes-file-delivery
-description: "Deliver files to the user through Hermes messaging platforms (Telegram etc.). THE mechanism is the MEDIA:<path> tag in your final reply — there is no send tool to search for. FIRST skill to load for any 'send/upload/put this file on Telegram' request. Covers the tag, MEDIA_DELIVERY_EXTS allowlist (.md works), [[as_document]] directive, adapter send paths, troubleshooting."
+description: "Deliver files to the user through Hermes messaging platforms (Telegram etc.). THE mechanism is the MEDIA:<path> tag in your final reply — there is no send tool to search for, and tool_search-hunting for one has burned THREE sessions (2026-09-28, 09-29, 10-03). FIRST skill to load for any 'send/upload/put this file on Telegram' request. Covers the tag, MEDIA_DELIVERY_EXTS allowlist (.md works), [[as_document]] directive, adapter send paths, Bot-API fallback routing, troubleshooting."
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -45,18 +45,25 @@ the text is delivered.
 ## Pitfalls
 
 - **"Send this over Telegram" ≠ find a send tool — READ THIS SKILL FIRST.**
-  This failure has recurred TWICE (2026-09-28 and again 2026-09-29: multiple
-  tool_search round-trips hunting a send tool, two attempts at an unloaded
-  `send_message` tool, then a raw Bot API script — while the one-step answer
-  was sitting here). When a file-delivery request arrives, the DEFAULT is:
-  write/verify the file, then put `MEDIA:<abs-path>` on its own line in the
-  final reply. Do not tool_search for send mechanisms. There is a
-  `send_message` tool in the codebase (tools/send_message_tool.py, supports
-  `MEDIA:<path>` in message text) but it is NOT wired into this profile's
-  runtime toolset — do not go looking; the tag path needs nothing.
+  This failure has recurred THREE times (2026-09-28 and 2026-09-29, then
+  AGAIN on 2026-10-03 — the DKMS handoff request burned ~8 tool_search calls
+  across 5 queries, then session-archaeology, then a hand-rolled Bot API
+  upload, while the one-step answer was sitting here). When a file-delivery
+  request arrives, the DEFAULT is: write/verify the file, then put
+  `MEDIA:<abs-path>` on its own line in the final reply. Do not tool_search
+  for send mechanisms. There is a `send_message` tool in the codebase
+  (tools/send_message_tool.py, supports `MEDIA:<path>` in message text) but
+  it is NOT wired into this profile's runtime toolset — do not go looking;
+  the tag path needs nothing.
   **Session-start trigger:** if the request says "send/attach/deliver … over
   Telegram (as a document/file)", load THIS skill before making any tool
   calls about delivery.
+  **Routing rule:** gateway/platform session → MEDIA: tag. Non-gateway
+  session (CLI context where the tag cannot deliver) → load the sibling
+  skill `messaging/telegram-send-file` — it already documents the Bot API
+  recipe (token source, multipart upload, chat_id). Do NOT re-derive the
+  recipe from session archives or tool_search — that archaeology step is
+  itself part of the recurring failure loop.
 
 - **Last-resort fallback (gateway path unavailable):** Bot API sendDocument
   works from execute_code/terminal — read the active `TELEGRAM_BOT_TOKEN` from
@@ -64,8 +71,14 @@ the text is delivered.
   `TELEGRAM_HOME_CHANNEL` (same file) or `channel_directory.json`, POST
   multipart `sendDocument` with caption. Verify `ok: true` + `message_id` in
   the response. Proven 2026-09-29 (16 KB .md handoff → home chat, doc
-  attachment + caption). Note the deliverable then lands OUTSIDE the gateway's
-  session history — prefer the tag whenever the gateway is up.
+  attachment + caption) and again 2026-10-03 (4.7 KB handoff). Simplest
+  upload form: stage the token to a 0600 temp file, then
+  `curl -F "chat_id=…" -F "document=@<file>" -F "caption=…"` against
+  `https://api.telegram.org/bot$TOKEN/sendDocument` — no stdlib multipart
+  script needed (verified 2026-10-03); **`shred -u` the staged token file
+  after the upload**. Full recipe lives in the sibling skill
+  `messaging/telegram-send-file`. Note the deliverable then lands OUTSIDE
+  the gateway's session history — prefer the tag whenever the gateway is up.
 - **Prose mentions don't deliver.** The tag must appear as a real `MEDIA:`
   token in the final reply — writing "the file is at /path/file.md" does
   nothing. Conversely, never write `MEDIA:` with a fake path in prose

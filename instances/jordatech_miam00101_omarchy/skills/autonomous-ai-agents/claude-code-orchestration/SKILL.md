@@ -116,6 +116,66 @@ Fable 5 has a per-session token budget. When running multiple parallel analyses,
 3. Run them sequentially, not in parallel
 4. Fall back to running analysis with any available model
 
+### 11. `--allowedTools` denial burns → error_max_turns (live 2026-10-03, $6.67 run)
+
+If the allowlist doesn't match the EXACT command forms the model emits, every
+denied Bash call still consumes a turn. The run ends `subtype:"error_max_turns"`
+with the deliverable written but NEVER self-verified.
+
+Hit live: allowlist had `Bash(python3 *)` but the worker ran
+`python -m pytest ...` (no `3`) — every test invocation denied, 81 turns
+burned, 13 latent test failures undiscovered until the orchestrator ran the
+suite itself.
+
+Rules:
+- Allowlist BOTH interpreter variants (`Bash(python *)` AND `Bash(python3 *)`)
+  plus every tool the packet demands (pytest, pip, git, alembic, gh...).
+- On ANY non-success result, read `permission_denials[].tool_input.command`
+  from the result JSON FIRST — it names exactly which commands were rejected
+  and why the turns burned.
+- `error_max_turns` ≠ the work failed: check `git status`/diff in the target
+  repo before judging or re-dispatching — the code is often complete and
+  correct; run the test suite YOURSELF before acting on either a success or
+  an error claim.
+- Pre-authorize the verify command in the packet text ("run: python3 -m
+  pytest tests/X -q") so the model doesn't improvise command variants, and
+  leave `--max-turns` headroom for verification.
+
+### 12. Autonomous background + handoff-file pattern (Jordan's standing steer, PROVEN 2026-10-03)
+
+Jordan directed (after the P2 allowlist burn): run Claude Code **fully
+autonomously in the background** and instruct it to **provide a markdown
+handoff file when completed** — Hermes supervises/merges instead of
+shepherding each step. The P3 run with this pattern: 34 turns, $1.89,
+success on first dispatch (vs P2's 81 turns / $6.67 / error_max_turns).
+
+Packet template that worked (see
+`~/dkms-build-20261003/claude-p3-packet.md` for a live example):
+
+1. Identity block: Work UID, Jira key, repo path, branch to create
+   (explicitly "NEVER commit on main").
+2. Objective: numbered, each item self-contained with the target
+   endpoint/file/behavior.
+3. Constraints: tests-first target count, suite-stays-green command,
+   AGENTS.md pointer, migration expectations.
+4. Acceptance criteria copied from the plan section.
+5. Rollback note (additive-only, revert commits).
+6. **Deliverables (MANDATORY):** PR opened with full body + **markdown
+   handoff file at a named path** — "Write this EVEN IF you run out of
+   turns — write it EARLY and keep it updated."
+7. **Reporting: print one final line `P<n>-DONE pr=<number> handoff=<path>`
+   or `P<n>-BLOCKED reason=<short>`.**
+
+Dispatch: stdin pipe, background terminal, `notify_on_complete=true`,
+`--max-turns 120`, allowlist including `Bash(gh pr create *)`,
+`Bash(gh pr view *)`, `Bash(gh pr checks *)`, `Bash(gh pr diff *)` so the
+worker can open its own PR and check CI.
+
+On completion notification: read the result JSON (`subtype`, `num_turns`,
+`total_cost_usd`, final line), verify the PR exists and CI is green
+YOURSELF, then merge via `~/bin/gh-merge`. Do NOT re-dispatch before
+checking what the worker actually produced.
+
 ## WHEN TO USE
 
 - **Multi-turn coding tasks** — When Claude Code needs to iterate on code (refactor → review → fix → test)
