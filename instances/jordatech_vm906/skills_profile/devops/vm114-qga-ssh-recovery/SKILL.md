@@ -55,6 +55,28 @@ this build). Keep each exec minimal; nohup + log-poll for long operations.
 requires explicit human authorization. SSH provisioned 2026-09-28 makes this
 almost never necessary.
 
+## 5. QGA wedge is NOT VM114-specific (generalize)
+
+The wedge class recurred on **VM117 (2026-10-03)** mid-window: after a burst
+of long execs (heredoc writes + pip installs during provisioning), PVE flips
+to 500 "QEMU guest agent is not running" while the VM itself keeps running
+(status=running, agent flag=1, memory normal). Same behavior on VM114/VM120
+historically. General rules:
+
+- **Keep exec payloads SHORT** — write files with `~/bin/pve_qga.py write`
+  (sha-verified) and exec only brief commands; big heredocs through
+  `guest-exec` both wedge the channel AND time out (500 timeout on long
+  exec even before the wedge).
+- The wedge may self-recover within minutes; re-probe with a 1-word exec
+  before escalating. If it persists, the in-guest `qemu-guest-agent` daemon
+  can be restarted — but VM117 had NO staged SSH key (template `stagent`
+  key not provisioned for this profile; ssh → Permission denied), so
+  recovery options are: wait/self-recover, PVE console, or qm reset
+  (human-gated for non-disposable VMs).
+- Prevention for future worker/service VMs: stage an SSH key at provision
+  time so qga wedges never block management access (VM124 got this via the
+  worker bring-up recipe; VM117 came up without one — lesson applied).
+
 ## Post-restart hygiene
 
 - `systemctl status qemu-guest-agent` "Memory: 3.9G" is cgroup page-cache from

@@ -407,6 +407,11 @@ gateway-domain env-staging recipe and the per-window acceptance matrices.
 
 ## Pointers
 
+- `references/dkms-build-window-2026-10-03.md` — the DKMS build window as seen
+  from the ACMS side: STNA-91 epic-clone recipe (ADF paragraph text-fill via
+  in-container python), reconcile→WORK-000020→dispatch→artifact→Jira BLUF
+  golden loop identifiers, and the pending P2 `dkms.*` gateway domain state
+  (packet + branch + result-file locations).
 - `references/mcp-gateway-w2-2026-10-02.md` — W2 session detail: llm/runtime adapter
   architecture decisions, live-found scope/resolver bugs, the live verification matrix
   (probe→method→result), tool addressing quirks, and the env-wiring/recreate recipe.

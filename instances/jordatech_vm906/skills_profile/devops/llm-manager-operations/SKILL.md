@@ -221,6 +221,18 @@ manual release transaction). Do not edit prod files in place.
   serving / ACMS bridge, NOT ARM; PDU hard-cycle is NEVER automatic. Tests:
   `tests/server_manager/test_recovery_policy.py` (shared fakes imported from
   test_reconciliation — import `make_runtime` too or NameError).
+- **Placement is CLASS-aware (PR #91, 2026-10-03, DKMS live-found):**
+  `TEMPLATE_PINNED_CLASSES = frozenset({"sandbox", "dkms_service"})` in
+  `services/placement.py` — classes that clone from the node-local golden
+  template (testthin on miam00111) pin to the TEMPLATE node at placement
+  instead of failing cross-node (`template storage 'testthin' not active on
+  placed node …`). Any NEW runtime_class cloning from VM135 must be added to
+  that frozenset. Provisioning a SERVICE (non-agent) VM through ARM works:
+  `POST /api/v1/agent-runtimes` with a durable pseudo `acms_agent_id`
+  (min 8 chars), `harness:"none"`, `runtime_class:"<service-class>"`; poll
+  `GET /provisioning-jobs/{job_id}` (UUID); failed attempts leave ERROR rows
+  to SUPERSEDE (never delete). See `dkms-operations` skill for the full
+  DKMS-VM provisioning recipe.
 
 ## LLM Manager web UI (window-5 additions — /admin/fleet, /admin/agents)
 

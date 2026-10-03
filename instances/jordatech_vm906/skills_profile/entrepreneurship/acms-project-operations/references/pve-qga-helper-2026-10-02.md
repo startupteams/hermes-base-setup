@@ -25,14 +25,31 @@
 24|5. **HTTP 596 broken pipe** on rapid sequential exec POSTs — retry with backoff
 25|   (helper does 4 attempts); a `file-write` nudge un-wedges a stuck channel.
 26|
-27|## Usage
-28|
-29|```bash
-30|~/bin/pve_qga.py exec miam00111 124 'hostname'          # guest stdout, exit code
-31|~/bin/pve_qga.py write miam00111 124 /local/file /opt/dest  # sha-verified stage
-32|```
-33|
-34|Node map for the worker fleet: VM124 uid-001 @ miam00111, VM125 uid-002 @
-35|miam00112, VM126 uid-003 @ miam00143, VM127 uid-004 @ miam00144, VM128 uid-005
-36|@ miam-00100.
+## Usage
+
+```bash
+~/bin/pve_qga.py exec miam00111 124 'hostname'          # guest stdout, exit code
+~/bin/pve_qga.py write miam00111 124 /local/file /opt/dest  # sha-verified stage
+```
+
+Node map for the worker fleet: VM124 uid-001 @ miam00111, VM125 uid-002 @
+miam00112, VM126 uid-003 @ miam00143, VM127 uid-004 @ miam00144, VM128 uid-005
+@ miam-00100. New 2026-10-03: **VM117 dkms-service-001 @ miam00111**
+(DHCP .190).
+
+## 2026-10-03 additions (DKMS window)
+
+- **Keep exec payloads SHORT.** A multi-KB heredoc through one `exec` call
+  either times out (`guest-exec failed - got timeout`) or contributes to the
+  guest-agent wedge (VM117 went to 500 "QEMU guest agent is not running"
+  after a burst of long execs — same class as VM114/VM120). Pattern that
+  works: `write` files (sha-verified) + short execs only.
+- **Content transfer into docker containers on qga-less paths:** piping
+  through `ssh … docker exec -i … sh -c 'cat > f'` HANGS; `docker cp` fails
+  in some containers ("Could not find the file /proc/self/fd"). Working
+  path: temp `python3 -m http.server 9111` on the CT host + in-container
+  urllib fetch + `exec(compile(src))` + pkill the server.
+- **In-guest K3s clusters:** `k3s kubectl` needs `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`
+  for non-interactive shells (cron/systemd); interactive root shell usually
+  picks it up automatically.
 37|
