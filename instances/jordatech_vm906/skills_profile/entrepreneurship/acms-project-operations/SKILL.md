@@ -359,7 +359,8 @@ The gateway (`miam-mcp-gateway.service` on VM114:8202) is additive; code lives i
 repo (`mcp_gateway/`) but deploys by **rsync to `/opt/mcp-gateway/repo/` + systemctl
 restart** — NOT via release.sh (preserve the gateway's own `.venv-mcp`). After any gateway
 change: rsync (exclude `.git .venv-mcp __pycache__ *.pyc acms.db dist .hermes`), restart,
-check `/health` reports the expected domains (7 LIVE: acms/llm/runtime/github/proxmox/power/jira;
+check `/health` reports the expected domains (8 LIVE since 2026-10-03:
+acms/llm/runtime/github/proxmox/power/jira/dkms;
 registry+monitoring code deployed but domains ABSENT until creds staged — absent-domain is the
 designed health behavior, not an error). rsync-with-delete does NOT delete a path that only
 exists remotely when the local tree also has the same dir — verify new-domain code markers
@@ -410,8 +411,11 @@ gateway-domain env-staging recipe and the per-window acceptance matrices.
 - `references/dkms-build-window-2026-10-03.md` — the DKMS build window as seen
   from the ACMS side: STNA-91 epic-clone recipe (ADF paragraph text-fill via
   in-container python), reconcile→WORK-000020→dispatch→artifact→Jira BLUF
-  golden loop identifiers, and the pending P2 `dkms.*` gateway domain state
-  (packet + branch + result-file locations).
+  golden loop identifiers, and the `dkms.*` gateway domain state at the time
+  of writing. **STATUS 2026-10-03 close-out: P2 merged + live (ACMS PRs
+  #93/#94) and P3 merged + live on VM117 (DKMS PR #8 `a6a06af`; deploy-
+  hardening PR #9 awaiting merge) — canonical DKMS operating detail now lives
+  in the `dkms-operations` skill, not here.**
 - `references/mcp-gateway-w2-2026-10-02.md` — W2 session detail: llm/runtime adapter
   architecture decisions, live-found scope/resolver bugs, the live verification matrix
   (probe→method→result), tool addressing quirks, and the env-wiring/recreate recipe.

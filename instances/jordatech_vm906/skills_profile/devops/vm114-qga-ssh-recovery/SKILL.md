@@ -66,13 +66,27 @@ historically. General rules:
 - **Keep exec payloads SHORT** — write files with `~/bin/pve_qga.py write`
   (sha-verified) and exec only brief commands; big heredocs through
   `guest-exec` both wedge the channel AND time out (500 timeout on long
-  exec even before the wedge).
-- The wedge may self-recover within minutes; re-probe with a 1-word exec
-  before escalating. If it persists, the in-guest `qemu-guest-agent` daemon
-  can be restarted — but VM117 had NO staged SSH key (template `stagent`
-  key not provisioned for this profile; ssh → Permission denied), so
-  recovery options are: wait/self-recover, PVE console, or qm reset
-  (human-gated for non-disposable VMs).
+  exec even before the wedge). **A guest-exec ending
+  `guest-exec failed - got timeout` is itself a wedge precursor — the agent
+  channel typically dies right after (VM117, 3× live 2026-10-03).**
+- Self-recovery is NOT reliable on hard wedges: VM117 stayed wedged 25–40 min
+  on three occasions; file-write nudges did NOT revive it. Re-probe with a
+  1-word exec after a few minutes, but don't wait long — go to reset.
+- **The working reset verb: `POST /nodes/{node}/qemu/{vmid}/status/reset`**
+  (host-side, no qga needed, plain API ticket auth). The bare
+  `POST .../qemu/{vmid}/reset` path is **501 Not Implemented** on this PVE
+  build. Reset reboots the VM (~60–75s); services/k3s pods recover from
+  persistent volumes — proven 4× on VM117 (2026-10-03) with zero data loss.
+  Human-gate still applies for non-disposable production VMs, but for
+  disposable/service VMs a hard wedge is a REASON to reset promptly (an
+  hour of dead management access costs more than the reboot).
+- Diagnostics before reset: `GET /nodes/{node}/qemu/{vmid}/agent` (the
+  agent-capability index) usually still answers while every channel 500s,
+  confirming qemu status=running + agent flag=1. `agent/get-osinfo` and
+  siblings are 501 here (not implemented). VM117 had NO staged SSH key
+  (template `stagent` key not provisioned for this profile; ssh →
+  Permission denied), so reset was the only recovery — stage an SSH key at
+  provision time for future VMs so a wedge never blocks management.
 - Prevention for future worker/service VMs: stage an SSH key at provision
   time so qga wedges never block management access (VM124 got this via the
   worker bring-up recipe; VM117 came up without one — lesson applied).
